@@ -1,0 +1,56 @@
+x-application: &application
+  image: gainmiles-api:local
+  build:
+    context: .
+    target: runtime
+  environment:
+    DB_HOST: db
+    DB_PORT: "5432"
+    POSTGRES_USER: ${POSTGRES_USER:-gainmiles}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gainmiles-local}
+    POSTGRES_DB: ${POSTGRES_DB:-gainmiles}
+
+services:
+  db:
+    image: postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gainmiles}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gainmiles-local}
+      POSTGRES_DB: ${POSTGRES_DB:-gainmiles}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  migrate:
+    <<: *application
+    command: ["flask", "--app", "app", "db", "upgrade"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *application
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/health', timeout=3)"
+      interval: 2s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+volumes:
+  postgres-data:

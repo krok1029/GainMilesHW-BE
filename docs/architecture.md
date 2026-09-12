@@ -1,6 +1,6 @@
 # 後端技術架構
 
-本文件記錄已確認的技術與執行流程，供後續實作使用。目前尚未建立 Flask 程式、Docker 設定或 migration；本文指令是預計介面，需在實作完成後驗證。
+本文件記錄已確認的技術與執行流程。ticket 01 已實作 Flask health、Docker Compose、四張表的 migration 與測試入口；商品 CRUD 及 seed 尚待後續 tickets 完成。目前可用的指令見 [README](../README.md)，本文保留整體目標架構。
 
 ## 技術與分工
 
@@ -14,7 +14,7 @@
 | 環境啟動 | Docker Compose，同時執行 API 與 PostgreSQL |
 | 測試 | pytest，DB 整合測試使用獨立 PostgreSQL 測試資料庫 |
 
-套件與 image 的確切版本在實作時選定並鎖定。PostgreSQL driver 與 request validation 套件也在實作時選定，不影響此分層及 API contract。
+套件由 uv.lock 鎖定，Python／PostgreSQL image 以 digest 固定；PostgreSQL driver 採 psycopg 3。確切版本見 README。request validation 套件留待 ticket 02 選定。
 
 ## 程式分層
 

@@ -1,6 +1,6 @@
 # 後端作業資料庫設計
 
-依據 [GainMiles Python Online Test (2026).docx](<GainMiles Python Online Test (2026).docx>) 設計。技術方向為 Python、Flask、PostgreSQL；本文件只定義資料模型與 DDL 草案，尚未建立資料庫或實作 API。
+依據 [GainMiles Python Online Test (2026).docx](<GainMiles Python Online Test (2026).docx>) 設計。技術方向為 Python、Flask、PostgreSQL；ticket 01 已以 SQLAlchemy models 與初始 migration 實作下述資料模型，商品 CRUD 仍待後續 tickets 完成。
 
 已確認以 `products.code` 為商品主鍵，將尺寸、顏色各自拆成明細表，另以分類表管理共用分類。共四張表，在下述業務規則下符合第三正規化（3NF），也消除了尺寸、顏色之間的獨立多值重複。API 行為見 [API contract](api-contract.md)，執行方式見 [技術架構](architecture.md)。
 
@@ -120,7 +120,7 @@ DB 允許商品暫時沒有尺寸或顏色明細，所以 ERD 使用零到多。
 
 ## PostgreSQL DDL 草案
 
-以下是設計用 SQL，尚未執行。
+以下 SQL 保留作為設計參考；實際建表以已提交的 Alembic migration 為準，包含具名 constraints。
 
 ```sql
 CREATE TABLE categories (
