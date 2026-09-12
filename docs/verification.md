@@ -172,3 +172,61 @@ Reviewer 唯讀檢查 `bb5c5cf…a0468e1`，未發現違反專案文件的變更
 ### 交付範圍
 
 ticket 03 全部 11 項驗收完成。README、架構與 API 文件已更新；PATCH、DELETE 與作業最終交付仍屬後續 tickets。工作提交在 `feat/flask-crud`，`main` 保持 `47fdb4a`，未 push 或建立 PR。
+
+
+## Ticket 04 部分更新商品與替換尺寸／顏色
+
+完成日期：2026-09-12。實作 commit：`ecd8877`；分支：`feat/flask-crud`。
+
+### 功能與測試
+
+新增 PATCH `/api/products/{code}`，僅更新提供的六種可寫欄位，禁止 code 出現在 body。選項整組取代並保留交集中的既有明細；未傳欄位不變。共用新增商品的價格、庫存與文字／集合驗證，以及分類解析。商品、明細與分類新增共用一筆交易；無新增 migration 或依賴。
+
+| 檢查 | 結果 |
+| --- | --- |
+| PATCH 庫存 TDD | 先回傳 405；實作後 200，未提供欄位保持不變，GET 可讀回 |
+| PATCH 行為單一測試檔 | 106 passed，包含多欄修改、選項替換與交集、原集合重送、數值邊界、字串修整／大小寫、所有適用欄位驗證、無效 URL 與錯誤優先順序 |
+| PATCH 交易單一測試檔 | 5 passed，包含替換途中／commit 故障、新分類競爭、重疊更新保留省略欄位及最後選項替換 |
+| 既有新增交易單一測試檔 | 7 passed，共用分類 resolver 與 concurrency fixture 後仍保持既有保證 |
+| 完整容器測試套件 | **264 passed**，包含 tickets 01 至 03 全部案例 |
+| 容器內 mypy | 20 個 source files，無錯誤 |
+| 容器內 Ruff | app、tests、migrations 全部通過 |
+| 格式與文件 | 22 個 Python 檔案符合 Ruff format；Markdown 連結與 Git whitespace 檢查通過 |
+
+完整驗證指令：
+
+```bash
+docker compose -p gainmiles-ticket04-tests -f compose.test.yaml run --build --rm tests
+docker compose -p gainmiles-ticket04-tests -f compose.test.yaml run --rm tests mypy
+docker compose -p gainmiles-ticket04-tests -f compose.test.yaml run --rm tests ruff check app tests migrations
+```
+
+PATCH 測試僅使用 POST 準備商品，再經 PATCH／單筆 GET 驗證，沒有依賴列表、seed 或刪除 API。沿用鎖定 Docker images 與真實 PostgreSQL；每個情境使用實際 migration 建立獨立暫存資料庫。
+
+### 回滾證據
+
+透過 POST 建立兩個共用分類的商品。在目標商品一次修改名稱、分類、金額、庫存與兩種集合時，測試用 AFTER DELETE trigger 確認新屬性、新分類及兩種新選項已寫入，再推進不隨 rollback 還原的 sequence 並拋錯。另一情境將同一 trigger 設為 deferred constraint，於 commit 時拋錯。
+
+兩者皆回傳一般化 500，sequence 證明已到達寫入途中；目標與另一個商品的 GET 皆保留原內容，新分類不存在，兩種明細筆數維持原值。移除故障後重試成功，確認交易與 session 可正常恢復。
+
+### 重疊更新與鎖等待
+
+- 不同商品同時改為同名新分類：測試用 advisory lock 暫停分類 INSERT，透過 `pg_stat_activity` 確認兩個獨立 writer 都等待鎖後釋放。兩個 PATCH 皆 200，共用一筆新分類，舊分類保留。
+- 同一商品先修改名稱、分類、庫存與兩種選項，再讓第二個 PATCH 等待。第一個請求確定到達 UPDATE 中的測試 trigger 後才啟動第二個，並確認兩個 writer 同時等待，再放行第一個。
+- 第二個只改庫存時保留前一個請求已更新的分類與選項；第二個亦替換集合時，以第二次集合為完整最終值，不殘留前次新增的選項。
+
+補測曾實際重現：若取得商品鎖的同一 statement 使用分類 JOIN，等待前的 snapshot 看不到前次交易新建的分類，第二個 PATCH 會因 category 為 None 回傳 500。改為先鎖住商品，再以 select-in 載入分類及選項後，兩個重疊案例通過。沒有新增版本欄位或樂觀版本鎖。
+
+### Standards
+
+Reviewer 唯讀檢查 `aead5a2…ecd8877`，無標準違反或需要提出的 baseline smell。驗證、HTTP 與交易分層明確，helper 不自行 commit，序列化前載入關聯。兩種明細替換保持簡短且明確，無需增加泛型抽象。
+
+### Spec
+
+另一位 reviewer 唯讀核對同一範圍，無缺漏、範圍擴張或可疑實作。部分更新、選項替換、不可變 code、驗證優先順序、共用分類、交易與競爭行為符合 ticket；共享解析與 fixture 調整直接支援這次功能。
+
+兩軸 reviewer 未修改檔案或執行測試；上方結果由主代理實際執行。Standards：0 項；Spec：0 項，各軸均無最嚴重待修問題。
+
+### 交付範圍
+
+ticket 04 全部 11 項驗收完成，README、架構與 API 文件已更新。刪除與最終交付仍屬後續 tickets。本次專用測試容器於驗證後清除。工作提交在 `feat/flask-crud`，`main` 保持 `47fdb4a`，未 push 或建立 PR。
