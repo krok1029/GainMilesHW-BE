@@ -1,6 +1,6 @@
 # GainMiles 後端作業
 
-目前完成 ticket 01 至 05：容器與資料庫基礎環境、商品完整 CRUD、欄位驗證、共用 JSON 錯誤處理，以及獨立的 seed-demo。整份作業的最終交付驗收仍由 ticket 06 完成。
+Flask／PostgreSQL 商品目錄 API，提供完整 CRUD、欄位驗證、統一 JSON 錯誤與獨立 seed-demo。Docker Compose 負責資料庫、migration 與 Gunicorn；下方提供從乾淨環境執行與驗收的完整步驟。
 
 ## 啟動
 
@@ -165,16 +165,17 @@ uv run --locked flask --app app db check
 
 主機執行時須提供可連線的 `DB_HOST`、`DB_PORT`、`POSTGRES_USER`、`POSTGRES_PASSWORD`、`POSTGRES_DB`；目前 Compose 的 DB 不對外發布 port，請在自己的開發 override 中明確設定，勿直接指向測試以外的資料庫跑測試。migration 生成後需重新 build application image。
 
-既有環境套用新程式及 migration 時，依序執行，migration 失敗就停止，不執行下一步：
+既有環境套用新程式及 migration 時，執行：
 
 ```bash
-docker compose stop api
-docker compose build
-docker compose run --rm migrate
-docker compose up --no-deps --wait api
+sh scripts/update-environment.sh
 ```
 
-`depends_on` 控制啟動順序，不會在 DB 或 migration 後續失敗時自動停止已執行的 API。`docker compose restart` 不會套用修改後的 image 或環境設定，不作為 schema 更新流程。此 ticket 尚未驗收既有環境更新的完整故障流程，該整合驗收屬 ticket 06。
+腳本依序執行 `stop api` → `build` → `run --rm migrate` → `up --no-deps --wait api`。任何一步失敗立即以非零結束，migration 失敗時 API 保持停止，不自動 downgrade。可在腳本後提供 Compose 選項，例如 `sh scripts/update-environment.sh --env-file .env -p gainmiles`；務必沿用啟動時的 project 與設定，才能更新同一環境。
+
+更新 migration 使用 `run --rm`，其 log 直接出現在更新指令輸出，不是舊的 startup migrate service log。需要留存時可使用 `sh scripts/update-environment.sh > update.log 2>&1`。失敗後檢查輸出、修正程式或設定，再明確重跑更新腳本；已停止的 API 不會自行恢復。
+
+`depends_on` 控制啟動順序，不會在 DB 或 migration 後續失敗時自動停止已執行的 API。`docker compose restart` 不會套用修改後的 image 或環境設定，不作為 schema 更新流程。成功更新、migration 失敗保持停止及明確恢復已納入下方交付驗收。
 
 ## 測試與型別檢查
 
@@ -232,6 +233,32 @@ sh tests/verify-startup.sh
 
 此指令使用自動產生的專案名稱和隨機 API port，驗證首次啟動、共用 image、重複 migration、DB 中斷／恢復，以及 migration 失敗阻止 API 啟動。結束僅清除本次建立的驗收容器與 volumes，失敗時列出 log。
 
+## 完整交付驗收
+
+只需 Docker 與 POSIX shell，不需要主機 Python。從專案根目錄執行：
+
+```bash
+sh tests/verify-startup.sh
+sh tests/verify-handoff.sh
+```
+
+第一個腳本驗證 migration／health 啟動順序及 DB 故障恢復。第二個腳本複製 `.env.example` 到暫存位置，以自動產生的 Compose project 與隨機 API port，依序驗證：
+
+- 空 DB 建表並就緒；獨立 seed 得到四筆精確原始商品。
+- 實際 Gunicorn HTTP 的列表、新增、單筆讀取、PATCH、DELETE 及主要錯誤回應。
+- 編輯範例商品、刪除另一範例後，重啟與重建 API container、`down` 後重開都保留狀態，不自動 seed。
+- 手動再 seed 只補回刪掉的範例，既有編輯不變。
+- 既有環境更新成功；指定不存在的 migration revision 時更新失敗，API 保持停止、revision 不變，診斷 log 可查；移除故障後明確恢復。
+- 在該驗收專案執行 `down --volumes` 後重開，得到全新空目錄。
+
+兩個腳本都只清除自己建立的測試專案與 volumes。失敗會以非零結束並列出診斷。Python HTTP 驗證程式經 stdin 送入 API container 執行，無須主機依賴，也不在 application 啟動路徑插入驗收邏輯。完整 pytest、mypy 與 Ruff 請依上一節的獨立測試容器指令執行。實際結果見 [驗證紀錄](docs/verification.md)。
+
+## AI 對話與總 PR
+
+依提交者指定，AI 對話使用 [設計 PostgreSQL 正規化 Schema 分享頁](https://chatgpt.com/s/cx_6aa513c2f92081918a49b17929d983f7)。這是分享時點的快照，已確認可讀；涵蓋範圍見 [AI 對話交付來源](docs/ai-conversation.md)，驗證紀錄不作為對話逐字稿的替代。
+
+整份作業維持在 `feat/flask-crud`，由功能 commits 累積，`main` 保持原始共同基底。[單一總 PR 草稿](docs/pr-summary.md) 整理變更、驗證與審核入口；目前不會自動 push、建立 PR 或 merge。
+
 ## 選用的主機 Python 開發環境
 
 主機開發需 Python 3.13 與 uv。先啟動專用測試 PostgreSQL：
@@ -278,6 +305,7 @@ docker compose down --volumes
 - [Ticket 03](.scratch/product-catalog-api/issues/03-seed-and-list-catalog.md)
 - [Ticket 04](.scratch/product-catalog-api/issues/04-patch-product-and-options.md)
 - [Ticket 05](.scratch/product-catalog-api/issues/05-delete-product-and-details.md)
+- [Ticket 06](.scratch/product-catalog-api/issues/06-reproducible-assignment-handoff.md)
+- [單一總 PR 草稿](docs/pr-summary.md)
+- [AI 對話來源](docs/ai-conversation.md)
 - [驗證紀錄](docs/verification.md)
-
-原作業要求使用 AI 時提供完整對話，提交前需一併附上。最終交付驗收仍屬 ticket 06。

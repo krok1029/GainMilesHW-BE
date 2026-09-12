@@ -1,6 +1,6 @@
 # 後端技術架構
 
-本文件記錄已確認的技術與執行流程。ticket 01 已實作 Flask health、Docker Compose、四張表的 migration 與測試入口；ticket 02 已實作新增商品、依 code 讀取與共用錯誤處理。ticket 03 已提供商品列表與 seed-demo。ticket 04 已提供 PATCH 部分更新與選項替換。ticket 05 已提供刪除商品與明細。最終交付驗收尚待 ticket 06 完成。目前可用的指令見 [README](../README.md)，本文保留整體目標架構。
+本文件記錄已確認的技術與執行流程。ticket 01 已實作 Flask health、Docker Compose、四張表的 migration 與測試入口；ticket 02 已實作新增商品、依 code 讀取與共用錯誤處理。ticket 03 已提供商品列表與 seed-demo。ticket 04 已提供 PATCH 部分更新與選項替換。ticket 05 已提供刪除商品與明細。ticket 06 提供既有環境更新腳本、可重跑的交付驗收與 AI 對話來源。目前可用的指令見 [README](../README.md)，本文保留整體目標架構。
 
 ## 技術與分工
 
@@ -30,14 +30,15 @@ Routes → Schemas → Service → SQLAlchemy Models → PostgreSQL
 
 目前 Service 直接使用 SQLAlchemy，未拆 Repository。使用 SQLAlchemy 2.x 的 `select()` 與 session API。
 
-## 預計目錄
+## 主要目錄
 
 ```text
 app/
 ├── __init__.py
-├── config.py
 ├── extensions.py
 ├── errors.py
+├── health.py
+├── json.py
 ├── models.py
 ├── seed.py
 └── products/
@@ -94,7 +95,7 @@ docker compose exec api flask --app app seed-demo
 
 Compose 的 `--wait`、一次性 migration service 與 healthcheck 配合已於 ticket 01 驗證；seed 可在 schema 就緒後獨立執行。
 
-更新既有環境的流程為：停止 API → 建置新 application image → 明確執行 migration → 成功後啟動新 API。失敗時保留 API 停止狀態並查閱 migration log；不自動執行 downgrade。
+更新既有環境的流程為：停止 API → 建置新 application image → 明確執行 migration → 成功後啟動新 API。失敗時保留 API 停止狀態並查閱 migration 指令輸出；不自動執行 downgrade。`scripts/update-environment.sh` 以遇錯停止的 shell 流程實作此順序，接受 Compose 選項以沿用指定 project 與 env file。
 
 `depends_on` 管理啟動順序，不會因後續 migration 或 DB 失敗，自動停止原本已執行的 API。`docker compose restart` 也不作為 schema 或設定更新流程。
 
@@ -120,7 +121,7 @@ Compose 的 `--wait`、一次性 migration service 與 healthcheck 配合已於 
 - migration 失敗時初次啟動的 API 不啟動；healthcheck 就緒後才能視為啟動完成。
 - 重建 application container 後，DB volume 中的資料仍存在。
 
-README 應包含環境準備、啟動、seed、API 範例、測試、migration、查看 log、保留資料的停止方式及會刪除資料的重設方式。提交時附題目要求的 AI 完整對話。
+README 包含環境準備、啟動、seed、API 範例、測試、migration、查看 log、保留資料的停止方式及會刪除資料的重設方式。`tests/verify-handoff.sh` 在獨立 Compose 專案驗證 CRUD、資料持久化、更新失敗／恢復及資料重設。AI 對話依提交者指定連結交付，見 [AI 對話來源](ai-conversation.md)。
 
 ## 參考
 
