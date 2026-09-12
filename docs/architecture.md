@@ -1,6 +1,6 @@
 # 後端技術架構
 
-本文件記錄已確認的技術與執行流程。ticket 01 已實作 Flask health、Docker Compose、四張表的 migration 與測試入口；ticket 02 已實作新增商品、依 code 讀取與共用錯誤處理。其餘商品操作及 seed 尚待後續 tickets 完成。目前可用的指令見 [README](../README.md)，本文保留整體目標架構。
+本文件記錄已確認的技術與執行流程。ticket 01 已實作 Flask health、Docker Compose、四張表的 migration 與測試入口；ticket 02 已實作新增商品、依 code 讀取與共用錯誤處理。ticket 03 已提供商品列表與 seed-demo。修改及刪除尚待後續 tickets 完成。目前可用的指令見 [README](../README.md)，本文保留整體目標架構。
 
 ## 技術與分工
 
@@ -63,7 +63,7 @@ ticket 02 以 PostgreSQL `INSERT ... ON CONFLICT DO NOTHING RETURNING` 取得新
 
 修改商品分類時只改商品的 `category_id`，不修改共用分類名稱。刪除商品清除其尺寸、顏色，保留分類。ORM relationship 的刪除設定需配合 DB cascade，並以整合測試驗證。
 
-商品列表批次載入分類、尺寸、顏色，避免每筆商品各查明細。兩個集合不直接展開後加總庫存，避免交叉乘積。實作可採 `selectinload()` 載入集合。
+商品列表批次載入分類、尺寸、顏色，避免每筆商品各查明細。兩個集合不直接展開後加總庫存，避免交叉乘積。列表以 joinedload 載入單一分類，使用 `selectinload()` 批次載入兩種集合，再於 Python 依 code 排序。
 
 本作業 inventory 是總數的直接編輯，不包含訂單、預留或扣庫存流程。若兩個請求同時修改同一欄位，本版採最後成功寫入的值，不增加版本鎖。
 
@@ -83,14 +83,14 @@ ticket 02 以 PostgreSQL `INSERT ... ON CONFLICT DO NOTHING RETURNING` 取得新
 
 API 提供 `GET /health`：可查詢 DB 時回傳 200 與 `{"status":"ok"}`，DB 不可用時回傳 503 與 `{"status":"unavailable"}`。healthcheck 不要求存在 seed 資料。空表是合法啟動狀態。
 
-預計首次啟動與 seed 指令：
+首次啟動與 seed 指令：
 
 ```bash
 docker compose up --build --wait
 docker compose exec api flask --app app seed-demo
 ```
 
-實作完成後需驗證選定 Compose 版本的 `--wait`、一次性 migration service 與 healthcheck 配合，確保回傳成功時可以直接執行 seed。
+Compose 的 `--wait`、一次性 migration service 與 healthcheck 配合已於 ticket 01 驗證；seed 可在 schema 就緒後獨立執行。
 
 更新既有環境的流程為：停止 API → 建置新 application image → 明確執行 migration → 成功後啟動新 API。失敗時保留 API 停止狀態並查閱 migration log；不自動執行 downgrade。
 
@@ -100,7 +100,7 @@ docker compose exec api flask --app app seed-demo
 
 開發時產生 migration，人工檢查主外鍵、CHECK、索引與級聯行為後提交。執行環境只套用已提交的 migration；不在啟動時自動產生版本，不使用 `create_all()` 取代 migration。
 
-`app/seed.py` 實作獨立 seed 邏輯，註冊為 `seed-demo` Flask CLI，沿用 app configuration 與 SQLAlchemy models。
+`app/seed.py` 實作獨立 seed 邏輯，註冊為 `seed-demo` Flask CLI，沿用 app configuration 與 SQLAlchemy models。HTTP 建立與 seed 共用 Service 的 `add_product`，該 helper 只加入並 flush 分類、商品及明細，不自行 commit。HTTP 的 create operation 與 seed 各自管理外層交易。
 
 - 資料來源為題目四筆商品；分類依名稱取得，不假設固定的 category_id。
 - 在一筆交易中寫入所有缺少的範例商品與其明細。

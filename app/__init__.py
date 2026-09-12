@@ -11,6 +11,7 @@ from app.extensions import db, migrate
 from app.health import health
 from app.json import StrictJSONProvider
 from app.products.routes import products
+from app.seed import seed_demo_command
 
 
 def create_app(config: Mapping[str, Any] | None = None) -> Flask:
@@ -40,4 +41,5 @@ def create_app(config: Mapping[str, Any] | None = None) -> Flask:
     app.register_blueprint(health)
     app.register_blueprint(products)
     register_error_handlers(app)
+    app.cli.add_command(seed_demo_command)
     return app

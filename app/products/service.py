@@ -10,31 +10,37 @@ from app.models import Category, Product, ProductColor, ProductSize
 from app.products.schemas import NewProduct, serialize_product
 
 
+def add_product(data: NewProduct) -> Product:
+    """Add a complete product to the caller's transaction without committing."""
+    category = db.session.scalar(
+        insert(Category)
+        .values(name=data.category)
+        .on_conflict_do_nothing(index_elements=[Category.name])
+        .returning(Category)
+    )
+    if category is None:
+        # A separate statement sees a concurrent winner after ON CONFLICT waits.
+        category = db.session.execute(
+            select(Category).where(Category.name == data.category)
+        ).scalar_one()
+    product = Product(
+        code=data.code,
+        name=data.name,
+        category=category,
+        unit_price=data.unit_price,
+        inventory=data.inventory,
+        sizes=[ProductSize(size=size) for size in data.sizes],
+        colors=[ProductColor(color=color) for color in data.colors],
+    )
+    db.session.add(product)
+    db.session.flush()
+    return product
+
+
 def create_product(data: NewProduct) -> dict[str, object]:
     try:
         with db.session.begin():
-            category = db.session.scalar(
-                insert(Category)
-                .values(name=data.category)
-                .on_conflict_do_nothing(index_elements=[Category.name])
-                .returning(Category)
-            )
-            if category is None:
-                # A separate statement sees a concurrent winner after ON CONFLICT waits.
-                category = db.session.execute(
-                    select(Category).where(Category.name == data.category)
-                ).scalar_one()
-            product = Product(
-                code=data.code,
-                name=data.name,
-                category=category,
-                unit_price=data.unit_price,
-                inventory=data.inventory,
-                sizes=[ProductSize(size=size) for size in data.sizes],
-                colors=[ProductColor(color=color) for color in data.colors],
-            )
-            db.session.add(product)
-            db.session.flush()
+            product = add_product(data)
             result = serialize_product(product)
     except IntegrityError as error:
         if (
@@ -59,3 +65,17 @@ def get_product(code: str) -> dict[str, object] | None:
         ],
     )
     return serialize_product(product) if product is not None else None
+
+
+def list_products() -> list[dict[str, object]]:
+    products = db.session.scalars(
+        select(Product).options(
+            joinedload(Product.category),
+            selectinload(Product.sizes),
+            selectinload(Product.colors),
+        )
+    ).all()
+    return [
+        serialize_product(product)
+        for product in sorted(products, key=lambda product: product.code)
+    ]

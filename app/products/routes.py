@@ -2,9 +2,14 @@ from flask import Blueprint, Response, abort, jsonify, request, url_for
 
 from app.errors import ApiError
 from app.products.schemas import is_product_code, parse_product
-from app.products.service import create_product, get_product
+from app.products.service import create_product, get_product, list_products
 
 products = Blueprint("products", __name__, url_prefix="/api/products")
+
+
+@products.get("")
+def list_catalog() -> Response:
+    return jsonify(data=list_products())
 
 
 @products.post("")

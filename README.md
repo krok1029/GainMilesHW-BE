@@ -1,6 +1,6 @@
 # GainMiles 後端作業
 
-目前完成 ticket 01 與 02：容器與資料庫基礎環境，以及新增商品、依 code 讀取、欄位驗證及共用 JSON 錯誤處理。列表、修改、刪除與 seed-demo 由後續 tickets 實作。
+目前完成 ticket 01 至 03：容器與資料庫基礎環境、新增商品、單筆讀取與列表、欄位驗證、共用 JSON 錯誤處理，以及獨立的 seed-demo。修改與刪除由後續 tickets 實作。
 
 ## 啟動
 
@@ -54,6 +54,34 @@ POST 回傳 201 與 `Location: /api/products/A-001`；GET 回傳 200。兩者 bo
 ```
 
 查詢 `/api/products/missing` 回傳 404 與 `PRODUCT_NOT_FOUND`。完整欄位及錯誤規則見 [API contract](docs/api-contract.md)。一次新增中的分類、商品與兩種明細共同提交；DB 寫入或 commit 失敗會 rollback，回傳一般化的 500，詳細錯誤保留在 API log。
+
+## 匯入範例資料與列表
+
+在 migration 完成、API 就緒後明確執行 seed：
+
+```bash
+docker compose exec api flask --app app seed-demo
+curl --fail http://localhost:8000/api/products
+```
+
+乾淨環境的 seed 輸出為 `Created: 4; skipped: 0.`；再執行一次為 `Created: 0; skipped: 4.`。列表回傳 200 與完整商品物件：
+
+```json
+{
+  "data": [
+    {"code":"A-001","name":"Star","category":"cloth","sizes":["M","S"],"unit_price":"200.00","inventory":20,"colors":["Blue","Red"]},
+    {"code":"A-002","name":"Moon","category":"cloth","sizes":["L","M"],"unit_price":"300.00","inventory":10,"colors":["Red","White"]},
+    {"code":"B-001","name":"Eagle","category":"pants","sizes":["L","M"],"unit_price":"100.00","inventory":23,"colors":["Green"]},
+    {"code":"B-002","name":"Bird","category":"pants","sizes":["L","M","S"],"unit_price":"50.00","inventory":12,"colors":["Black"]}
+  ]
+}
+```
+
+未匯入且沒有自行建立商品時，列表為 `{"data":[]}`。商品按 code 的 Unicode code point 排序；列表回傳全部商品，不提供分頁或篩選。
+
+seed 只補上缺少的範例 code，既有商品的名稱、分類、價格、庫存與尺寸／顏色全部保留，缺少的明細也不修復或合併。因此若先執行上方新增範例，第一次 seed 會是新增 3、跳過 1。刪除範例商品後再 seed，該商品會依原始值重建。非範例商品不受影響。
+
+一次 seed 的所有新增商品與明細共用單一交易；中途失敗或 commit 失敗，整次 rollback，CLI 以非零 exit code 結束，既有資料保留。成功筆數在 commit 後才輸出。seed 不會隨 API 啟動或重啟自動執行，也不會清空資料。
 
 ## 版本與設定
 
@@ -115,6 +143,15 @@ docker compose -p gainmiles-tests -f compose.test.yaml run --rm tests pytest -q 
 
 第一個檔案涵蓋新增讀回、欄位邊界與錯誤格式；第二個涵蓋共用分類、重複 code、重疊請求及交易回滾。競爭測試透過 PostgreSQL advisory lock 與 `pg_locks` 確認兩個獨立連線都正在等待後才釋放；回滾測試只在當次暫存 DB 安裝 trigger，分別於明細寫入及 commit 階段製造失敗。測試不需要 demo seed，也不在正式程式加入測試用 hook。
 
+列表與 seed 的單一測試入口：
+
+```bash
+docker compose -p gainmiles-tests -f compose.test.yaml run --rm tests pytest -q tests/test_catalog.py
+docker compose -p gainmiles-tests -f compose.test.yaml run --rm tests pytest -q tests/test_seed.py
+```
+
+列表測試包含排序、完整商品欄位及批次讀取預算。seed 測試透過公開 Flask CLI 與列表／單筆 API 驗證原始資料、筆數、重跑、保留已編輯內容、不修復選項、刪除後重建及不同分類識別值。中途失敗測試在暫存 DB 安裝 trigger，以不隨 rollback 還原的 sequence 確認已到達多筆寫入途中，再驗證整次新增回滾且既有資料保留。
+
 Compose 啟動驗收從主機執行，不需要主機 Python：
 
 ```bash
@@ -166,6 +203,7 @@ docker compose down --volumes
 - [母規格](.scratch/product-catalog-api/spec.md)
 - [Ticket 01](.scratch/product-catalog-api/issues/01-container-startup-and-health.md)
 - [Ticket 02](.scratch/product-catalog-api/issues/02-create-and-read-product.md)
+- [Ticket 03](.scratch/product-catalog-api/issues/03-seed-and-list-catalog.md)
 - [驗證紀錄](docs/verification.md)
 
-原作業要求使用 AI 時提供完整對話，提交前需一併附上。完整 CRUD、seed 與最終交付驗收仍屬後續 tickets。
+原作業要求使用 AI 時提供完整對話，提交前需一併附上。修改、刪除與最終交付驗收仍屬後續 tickets。
