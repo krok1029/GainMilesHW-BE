@@ -63,3 +63,23 @@ def product_payload() -> dict[str, Any]:
         "inventory": 20,
         "colors": ["Red", "Blue"],
     }
+
+
+@pytest.fixture
+def concurrent_app(app: Flask, database_url: URL) -> Iterator[Flask]:
+    application = create_app(
+        {
+            "TESTING": True,
+            "SQLALCHEMY_DATABASE_URI": database_url,
+            # Leave time for lock observation on slower CI machines.
+            "SQLALCHEMY_ENGINE_OPTIONS": {
+                "connect_args": {"options": "-c statement_timeout=15000"}
+            },
+        }
+    )
+    try:
+        yield application
+    finally:
+        with application.app_context():
+            db.session.remove()
+            db.engine.dispose()

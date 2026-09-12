@@ -1,6 +1,6 @@
 # GainMiles 後端作業
 
-目前完成 ticket 01 至 03：容器與資料庫基礎環境、新增商品、單筆讀取與列表、欄位驗證、共用 JSON 錯誤處理，以及獨立的 seed-demo。修改與刪除由後續 tickets 實作。
+目前完成 ticket 01 至 04：容器與資料庫基礎環境、新增商品、單筆讀取與列表、部分更新、欄位驗證、共用 JSON 錯誤處理，以及獨立的 seed-demo。刪除由後續 ticket 實作。
 
 ## 啟動
 
@@ -83,6 +83,42 @@ seed 只補上缺少的範例 code，既有商品的名稱、分類、價格、�
 
 一次 seed 的所有新增商品與明細共用單一交易；中途失敗或 commit 失敗，整次 rollback，CLI 以非零 exit code 結束，既有資料保留。成功筆數在 commit 後才輸出。seed 不會隨 API 啟動或重啟自動執行，也不會清空資料。
 
+## 部分更新商品
+
+先依上方範例新增 A-001，或執行 seed，再送出 PATCH：
+
+```bash
+curl -i -X PATCH http://localhost:8000/api/products/A-001 \
+  -H 'Content-Type: application/json' \
+  -d '{"inventory":12,"sizes":["M","L"]}'
+curl --fail http://localhost:8000/api/products/A-001
+```
+
+PATCH 回傳 200 與完整商品。若商品仍為原始範例值，回應為：
+
+```json
+{"code":"A-001","name":"Star","category":"cloth","sizes":["L","M"],"unit_price":"200.00","inventory":12,"colors":["Blue","Red"]}
+```
+
+只有傳入欄位會更新。sizes 從 S、M 改為 L、M，S 明細被移除、M 保留、L 新增；colors 未傳入，因此不變。colors 同樣採整組取代，不是追加或聯集。兩者回應皆以 Unicode code point 排序。
+
+可以同時修改 name、category、unit_price、inventory、sizes 與 colors。category 改為新名稱時，在同一交易建立新分類；其他引用舊分類的商品不受影響。價格使用十進位字串，庫存為商品總數。
+
+商品 code 建立後不可修改；即使提交相同值也回傳 422：
+
+```bash
+curl -i -X PATCH http://localhost:8000/api/products/A-001 \
+  -H 'Content-Type: application/json' -d '{"code":"A-001"}'
+```
+
+```json
+{"error":{"code":"VALIDATION_ERROR","message":"Request validation failed.","fields":{"code":["Product code cannot be changed."]}}}
+```
+
+空 object、null、未知欄位、空集合及其他不合法欄位也回傳 422。媒體類型及 JSON 解析、欄位驗證都在商品存在性檢查之前；合法更新請求找不到商品則回傳 404 PRODUCT_NOT_FOUND。
+
+屬性、選項替換與新分類一起提交，寫入或 commit 失敗時全部 rollback。同一商品的重疊更新會依序讀取最新狀態，保留未提供欄位；同欄位採最後成功寫入的值。
+
 ## 版本與設定
 
 Python image 內版本為 3.13.15，PostgreSQL image 內版本為 18.6；兩者以 manifest digest 固定。PostgreSQL 18 的 volume 掛在 `/var/lib/postgresql`。
@@ -152,6 +188,15 @@ docker compose -p gainmiles-tests -f compose.test.yaml run --rm tests pytest -q 
 
 列表測試包含排序、完整商品欄位及批次讀取預算。seed 測試透過公開 Flask CLI 與列表／單筆 API 驗證原始資料、筆數、重跑、保留已編輯內容、不修復選項、刪除後重建及不同分類識別值。中途失敗測試在暫存 DB 安裝 trigger，以不隨 rollback 還原的 sequence 確認已到達多筆寫入途中，再驗證整次新增回滾且既有資料保留。
 
+PATCH 的單一測試入口：
+
+```bash
+docker compose -p gainmiles-tests -f compose.test.yaml run --rm tests pytest -q tests/test_patch_product.py
+docker compose -p gainmiles-tests -f compose.test.yaml run --rm tests pytest -q tests/test_patch_transactions.py
+```
+
+測試使用 POST 準備商品，再以 PATCH 與單筆 GET 驗證，不依賴 seed、列表或刪除 API。交易測試在選項刪除途中與 commit 階段注入故障，確認原屬性、明細及分類保留；競爭測試確認新分類共用、同商品最後寫入值，以及等待中的更新能看見前一交易新建的分類。
+
 Compose 啟動驗收從主機執行，不需要主機 Python：
 
 ```bash
@@ -204,6 +249,7 @@ docker compose down --volumes
 - [Ticket 01](.scratch/product-catalog-api/issues/01-container-startup-and-health.md)
 - [Ticket 02](.scratch/product-catalog-api/issues/02-create-and-read-product.md)
 - [Ticket 03](.scratch/product-catalog-api/issues/03-seed-and-list-catalog.md)
+- [Ticket 04](.scratch/product-catalog-api/issues/04-patch-product-and-options.md)
 - [驗證紀錄](docs/verification.md)
 
-原作業要求使用 AI 時提供完整對話，提交前需一併附上。修改、刪除與最終交付驗收仍屬後續 tickets。
+原作業要求使用 AI 時提供完整對話，提交前需一併附上。刪除與最終交付驗收仍屬後續 tickets。

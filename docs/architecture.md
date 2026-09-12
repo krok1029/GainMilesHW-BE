@@ -1,6 +1,6 @@
 # 後端技術架構
 
-本文件記錄已確認的技術與執行流程。ticket 01 已實作 Flask health、Docker Compose、四張表的 migration 與測試入口；ticket 02 已實作新增商品、依 code 讀取與共用錯誤處理。ticket 03 已提供商品列表與 seed-demo。修改及刪除尚待後續 tickets 完成。目前可用的指令見 [README](../README.md)，本文保留整體目標架構。
+本文件記錄已確認的技術與執行流程。ticket 01 已實作 Flask health、Docker Compose、四張表的 migration 與測試入口；ticket 02 已實作新增商品、依 code 讀取與共用錯誤處理。ticket 03 已提供商品列表與 seed-demo。ticket 04 已提供 PATCH 部分更新與選項替換。刪除尚待後續 ticket 完成。目前可用的指令見 [README](../README.md)，本文保留整體目標架構。
 
 ## 技術與分工
 
@@ -64,6 +64,8 @@ ticket 02 以 PostgreSQL `INSERT ... ON CONFLICT DO NOTHING RETURNING` 取得新
 修改商品分類時只改商品的 `category_id`，不修改共用分類名稱。刪除商品清除其尺寸、顏色，保留分類。ORM relationship 的刪除設定需配合 DB cascade，並以整合測試驗證。
 
 商品列表批次載入分類、尺寸、顏色，避免每筆商品各查明細。兩個集合不直接展開後加總庫存，避免交叉乘積。列表以 joinedload 載入單一分類，使用 `selectinload()` 批次載入兩種集合，再於 Python 依 code 排序。
+
+PATCH 使用與新增相同的欄位驗證，明確區分欄位未傳入與非法 null。交易內先以 `SELECT FOR UPDATE` 鎖住商品，再分別載入分類、尺寸與顏色；關聯查詢在取得鎖後執行，避免等待前的 JOIN snapshot 看不到前一筆交易剛建立的分類。選項替換保留交集中的既有 ORM 明細、移除其餘明細並新增缺少值。分類解析沿用新增與 seed 使用的 `resolve_category`，helper 不自行 commit。
 
 本作業 inventory 是總數的直接編輯，不包含訂單、預留或扣庫存流程。若兩個請求同時修改同一欄位，本版採最後成功寫入的值，不增加版本鎖。
 

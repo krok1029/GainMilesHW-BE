@@ -9,9 +9,6 @@ from flask import Flask
 from sqlalchemy import Connection, Engine, create_engine, text
 from sqlalchemy.engine import URL
 
-from app import create_app
-from app.extensions import db
-
 
 @pytest.fixture
 def observer(app: Flask, database_url: URL) -> Iterator[Engine]:
@@ -134,26 +131,6 @@ def test_duplicate_code_rolls_back_new_category(
         "product_sizes": 2,
         "product_colors": 2,
     }
-
-
-@pytest.fixture
-def concurrent_app(app: Flask, database_url: URL) -> Iterator[Flask]:
-    application = create_app(
-        {
-            "TESTING": True,
-            "SQLALCHEMY_DATABASE_URI": database_url,
-            # Leave time for lock observation on slower CI machines.
-            "SQLALCHEMY_ENGINE_OPTIONS": {
-                "connect_args": {"options": "-c statement_timeout=15000"}
-            },
-        }
-    )
-    try:
-        yield application
-    finally:
-        with application.app_context():
-            db.session.remove()
-            db.engine.dispose()
 
 
 def wait_for_two_blocked_writers(connection: Connection) -> None:

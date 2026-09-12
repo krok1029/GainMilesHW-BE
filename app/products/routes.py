@@ -1,8 +1,13 @@
 from flask import Blueprint, Response, abort, jsonify, request, url_for
 
 from app.errors import ApiError
-from app.products.schemas import is_product_code, parse_product
-from app.products.service import create_product, get_product, list_products
+from app.products.schemas import is_product_code, parse_product, parse_product_changes
+from app.products.service import (
+    create_product,
+    get_product,
+    list_products,
+    patch_product,
+)
 
 products = Blueprint("products", __name__, url_prefix="/api/products")
 
@@ -29,3 +34,13 @@ def get(code: str) -> Response:
     if product is None:
         raise ApiError(404, "PRODUCT_NOT_FOUND", "Product not found.")
     return jsonify(product)
+
+
+@products.patch("/<string:code>")
+def patch(code: str) -> Response:
+    if request.mimetype != "application/json":
+        abort(415)
+    changes = parse_product_changes(request.get_json())
+    if not is_product_code(code):
+        raise ApiError(404, "PRODUCT_NOT_FOUND", "Product not found.")
+    return jsonify(patch_product(code, changes))
