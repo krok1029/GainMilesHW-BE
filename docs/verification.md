@@ -230,3 +230,53 @@ Reviewer 唯讀檢查 `aead5a2…ecd8877`，無標準違反或需要提出的 ba
 ### 交付範圍
 
 ticket 04 全部 11 項驗收完成，README、架構與 API 文件已更新。刪除與最終交付仍屬後續 tickets。本次專用測試容器於驗證後清除。工作提交在 `feat/flask-crud`，`main` 保持 `47fdb4a`，未 push 或建立 PR。
+
+
+## Ticket 05 刪除商品並清除明細
+
+完成日期：2026-09-12。實作 commit：`ca3e930`；分支：`feat/flask-crud`。
+
+### 功能與測試
+
+新增 DELETE `/api/products/{code}`，使用 SQLAlchemy `DELETE ... RETURNING code` 在同一 statement 判斷商品是否存在。尺寸與顏色沿用 PostgreSQL 外鍵 cascade，分類不刪除；外層交易成功提交後回傳空 body 的 204。未知或重複刪除回傳共用 404 PRODUCT_NOT_FOUND。無新 migration、依賴或測試用產品程式 hook。
+
+| 檢查 | 結果 |
+| --- | --- |
+| DELETE TDD | 先回傳 405；實作後 204 且 body 為空，後續 GET 404 |
+| 刪除單一測試檔 | 12 passed，包含成功、重複刪除、未知／大小寫不同／非法 URL code、最後商品與共用分類保留、cascade 及 commit 失敗 |
+| 完整容器測試套件 | **276 passed**，包含 tickets 01 至 04 全部案例 |
+| 容器內 mypy | 21 個 source files，無錯誤 |
+| 容器內 Ruff | app、tests、migrations 全部通過 |
+| 格式與文件 | 23 個 Python 檔案符合 Ruff format；Markdown 連結與 Git whitespace 檢查通過 |
+
+完整驗證指令：
+
+```bash
+docker compose -p gainmiles-ticket05-tests -f compose.test.yaml run --build --rm tests
+docker compose -p gainmiles-ticket05-tests -f compose.test.yaml run --rm tests mypy
+docker compose -p gainmiles-ticket05-tests -f compose.test.yaml run --rm tests ruff check app tests migrations
+```
+
+測試以 POST 建立商品，DELETE 執行操作，再以單筆 GET 驗證；不依賴列表、seed 或 PATCH。DB 觀察限於分類保留、目標明細清除與回滾證據，使用實際 migration 建立的隔離 PostgreSQL 資料庫。
+
+### 刪除與回滾證據
+
+- 刪除唯一商品後，目標尺寸／顏色筆數皆為零，原分類識別值與名稱仍存在。
+- 刪除共用分類中的一個商品後，另一個商品的完整 GET 表示保持不變，分類保留。
+- 測試用 AFTER DELETE trigger 在顏色 cascade 階段，確認商品已不存在後推進不隨 rollback 還原的 sequence，再拋出錯誤；另一情境使用 deferred constraint trigger 於 commit 時失敗。
+- 兩個失敗情境都回傳一般化 500，log 記錄錯誤。sequence 證明已進入實際刪除；rollback 後原商品、所有尺寸／顏色及同分類其他商品皆完整可讀，明細筆數與分類保持不變。
+- 移除故障後重試 DELETE 成功，GET 為 404，另一商品仍不受影響。
+
+### Standards
+
+Reviewer 唯讀檢查 `ca15dfe…ca3e930`，無硬性標準違反或需要提出的 baseline smell。HTTP 與交易分工、共用錯誤格式及 DB cascade 使用符合架構與 schema 文件，沒有增加多餘抽象。
+
+### Spec
+
+另一位 reviewer 唯讀檢查同一範圍，無缺漏、錯誤實作或範圍擴張。204／404、分類保留、明細清除、其他商品不受影響及故障回滾均符合 ticket，測試不依賴尚未要求的其他操作。
+
+兩軸 reviewer 未修改檔案或執行測試；上方結果由主代理實際執行。Standards：0 項；Spec：0 項，各軸均無最嚴重待修問題。
+
+### 交付範圍
+
+ticket 05 全部 7 項驗收完成，商品 CRUD 已實作，README、架構與 API 文件同步更新。整份作業的最終交付驗收仍屬 ticket 06，不能以本次測試代替。本次專用測試容器於驗證後清除。工作提交在 `feat/flask-crud`，`main` 保持 `47fdb4a`，未 push 或建立 PR。
