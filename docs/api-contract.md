@@ -1,6 +1,6 @@
 # 商品 API contract
 
-本文件供後續實作使用，尚無可呼叫的服務。商品操作規則已確認；本版補齊 JSON 欄位名稱、金額格式、列表格式及排序等細節，作為實作預設。
+本文件記錄整體商品操作契約。ticket 02 已提供 POST 新增、單筆 GET 與共用錯誤處理；列表、PATCH、DELETE 尚待後續 tickets 實作。可執行範例見 [README](../README.md)。
 
 ## 共通格式
 
@@ -58,6 +58,8 @@ POST、單筆 GET、PATCH 的成功 response 都直接回傳上述七個欄位�
 
 POST 必須包含全部七個欄位。未知欄位、`null`、非 object JSON body 均回傳 422。code 不自動去空白或變更大小寫；其 API 格式限制不改變 DB `text` 欄位，也不從代碼推導分類。
 
+文字欄位與集合元素須為 PostgreSQL 可儲存的 Unicode 文字；NUL 與未配對 surrogate 回傳 422。
+
 分類以修整後的名稱查找，不存在時在商品操作的交易內建立。更新分類是修改商品引用，不修改共用分類的名稱。
 
 ## PATCH 規則
@@ -103,6 +105,8 @@ POST 必須包含全部七個欄位。未知欄位、`null`、非 object JSON bo
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | POST/PATCH 未使用 application/json |
 | 422 | `VALIDATION_ERROR` | 欄位缺少、值不合法、未知欄位或修改 code |
 | 500 | `INTERNAL_ERROR` | 未預期錯誤，不回傳 SQL 或 traceback |
+
+未加引號的 `NaN`、`Infinity` 與 `-Infinity` 不是合法 JSON，回傳 400；價格字串 `"NaN"` 等則是 JSON 可解析但欄位不合法，回傳 422。
 
 處理順序：確認媒體類型與 JSON 可解析 → 驗證 body → 執行商品操作。只有通過 request 驗證後，才進行商品存在性與 DB 衝突判斷。
 

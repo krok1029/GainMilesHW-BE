@@ -1,5 +1,6 @@
 import os
 from collections.abc import Iterator
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -49,3 +50,16 @@ def app(database_url: URL) -> Iterator[Flask]:
         with application.app_context():
             db.session.remove()
             db.engine.dispose()
+
+
+@pytest.fixture
+def product_payload() -> dict[str, Any]:
+    return {
+        "code": "A-001",
+        "name": "Star",
+        "category": "cloth",
+        "sizes": ["S", "M"],
+        "unit_price": "200",
+        "inventory": 20,
+        "colors": ["Red", "Blue"],
+    }

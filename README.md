@@ -1,6 +1,6 @@
 # GainMiles 後端作業
 
-目前完成 ticket 01：Flask health endpoint、PostgreSQL 四張商品目錄資料表、migration、Docker Compose 啟動流程及測試入口。商品 CRUD 與 seed-demo 分別由後續 tickets 實作，目前尚未提供。
+目前完成 ticket 01 與 02：容器與資料庫基礎環境，以及新增商品、依 code 讀取、欄位驗證及共用 JSON 錯誤處理。列表、修改、刪除與 seed-demo 由後續 tickets 實作。
 
 ## 啟動
 
@@ -23,6 +23,37 @@ Compose 依序等待 PostgreSQL healthy、執行 migration，再啟動 Gunicorn�
 | `api` | Gunicorn／Flask，僅將 API port 發布到主機 loopback |
 
 PostgreSQL 不發布主機 port。容器間使用 hostname `db`；`POSTGRES_USER`、`POSTGRES_PASSWORD`、`POSTGRES_DB` 由環境變數傳入，程式建立連線 URL 時會處理密碼特殊字元。範例帳密供本機作業使用。已有 DB volume 時，修改環境變數不會自動修改既有資料庫帳密。
+
+## 新增與讀取商品
+
+啟動後即可建立商品，不需要 seed 或先建立分類：
+
+```bash
+curl -i -X POST http://localhost:8000/api/products \
+  -H 'Content-Type: application/json' \
+  -d '{"code":"A-001","name":"Star","category":"cloth","sizes":["S","M"],"unit_price":"200","inventory":20,"colors":["Red","Blue"]}'
+curl -i http://localhost:8000/api/products/A-001
+```
+
+POST 回傳 201 與 `Location: /api/products/A-001`；GET 回傳 200。兩者 body 相同：
+
+```json
+{"code":"A-001","name":"Star","category":"cloth","sizes":["M","S"],"unit_price":"200.00","inventory":20,"colors":["Blue","Red"]}
+```
+
+價格必須使用字串，庫存使用 JSON 整數；尺寸與顏色輸出依 Unicode code point 排序。再次送出同一商品的 POST 回傳 409：
+
+```json
+{"error":{"code":"PRODUCT_CODE_EXISTS","message":"Product code already exists.","fields":{}}}
+```
+
+將 POST 範例的 inventory 改為 `true`，會先回傳 422，即使 code 已經存在：
+
+```json
+{"error":{"code":"VALIDATION_ERROR","message":"Request validation failed.","fields":{"inventory":["Must be an integer from 0 to 2147483647."]}}}
+```
+
+查詢 `/api/products/missing` 回傳 404 與 `PRODUCT_NOT_FOUND`。完整欄位及錯誤規則見 [API contract](docs/api-contract.md)。一次新增中的分類、商品與兩種明細共同提交；DB 寫入或 commit 失敗會 rollback，回傳一般化的 500，詳細錯誤保留在 API log。
 
 ## 版本與設定
 
@@ -73,7 +104,16 @@ docker compose -p gainmiles-tests -f compose.test.yaml run --rm tests ruff check
 docker compose -p gainmiles-tests -f compose.test.yaml down --volumes
 ```
 
-可在 `tests` 後指定單一測試，例如 `pytest -q tests/test_health.py`。health 透過 Flask test client 驗證；migration 使用 Flask CLI 及窄範圍 DB 完整性檢查，涵蓋必填、數值範圍、唯一限制、外鍵、cascade、重複 upgrade、schema 與 models 一致及空測試 DB 的 downgrade。
+可在 `tests` 後指定單一測試，例如 `pytest -q tests/test_products.py`。health 透過 Flask test client 驗證；migration 使用 Flask CLI 及窄範圍 DB 完整性檢查，涵蓋必填、數值範圍、唯一限制、外鍵、cascade、重複 upgrade、schema 與 models 一致及空測試 DB 的 downgrade。
+
+商品測試透過 Flask test client 與真實 PostgreSQL 驗證：
+
+```bash
+docker compose -p gainmiles-tests -f compose.test.yaml run --rm tests pytest -q tests/test_products.py
+docker compose -p gainmiles-tests -f compose.test.yaml run --rm tests pytest -q tests/test_product_transactions.py
+```
+
+第一個檔案涵蓋新增讀回、欄位邊界與錯誤格式；第二個涵蓋共用分類、重複 code、重疊請求及交易回滾。競爭測試透過 PostgreSQL advisory lock 與 `pg_locks` 確認兩個獨立連線都正在等待後才釋放；回滾測試只在當次暫存 DB 安裝 trigger，分別於明細寫入及 commit 階段製造失敗。測試不需要 demo seed，也不在正式程式加入測試用 hook。
 
 Compose 啟動驗收從主機執行，不需要主機 Python：
 
@@ -125,6 +165,7 @@ docker compose down --volumes
 - [API contract](docs/api-contract.md)
 - [母規格](.scratch/product-catalog-api/spec.md)
 - [Ticket 01](.scratch/product-catalog-api/issues/01-container-startup-and-health.md)
+- [Ticket 02](.scratch/product-catalog-api/issues/02-create-and-read-product.md)
 - [驗證紀錄](docs/verification.md)
 
 原作業要求使用 AI 時提供完整對話，提交前需一併附上。完整 CRUD、seed 與最終交付驗收仍屬後續 tickets。

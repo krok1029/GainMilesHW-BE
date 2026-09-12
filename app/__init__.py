@@ -6,12 +6,16 @@ from flask import Flask
 from sqlalchemy import URL
 
 from app import models  # noqa: F401
+from app.errors import register_error_handlers
 from app.extensions import db, migrate
 from app.health import health
+from app.json import StrictJSONProvider
+from app.products.routes import products
 
 
 def create_app(config: Mapping[str, Any] | None = None) -> Flask:
     app = Flask(__name__)
+    app.json = StrictJSONProvider(app)
     app.config.from_mapping(
         SQLALCHEMY_DATABASE_URI=URL.create(
             "postgresql+psycopg",
@@ -34,4 +38,6 @@ def create_app(config: Mapping[str, Any] | None = None) -> Flask:
     db.init_app(app)
     migrate.init_app(app, db, render_as_batch=False)
     app.register_blueprint(health)
+    app.register_blueprint(products)
+    register_error_handlers(app)
     return app

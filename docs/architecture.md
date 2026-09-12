@@ -1,6 +1,6 @@
 # 後端技術架構
 
-本文件記錄已確認的技術與執行流程。ticket 01 已實作 Flask health、Docker Compose、四張表的 migration 與測試入口；商品 CRUD 及 seed 尚待後續 tickets 完成。目前可用的指令見 [README](../README.md)，本文保留整體目標架構。
+本文件記錄已確認的技術與執行流程。ticket 01 已實作 Flask health、Docker Compose、四張表的 migration 與測試入口；ticket 02 已實作新增商品、依 code 讀取與共用錯誤處理。其餘商品操作及 seed 尚待後續 tickets 完成。目前可用的指令見 [README](../README.md)，本文保留整體目標架構。
 
 ## 技術與分工
 
@@ -14,7 +14,7 @@
 | 環境啟動 | Docker Compose，同時執行 API 與 PostgreSQL |
 | 測試 | pytest，DB 整合測試使用獨立 PostgreSQL 測試資料庫 |
 
-套件由 uv.lock 鎖定，Python／PostgreSQL image 以 digest 固定；PostgreSQL driver 採 psycopg 3。確切版本見 README。request validation 套件留待 ticket 02 選定。
+套件由 uv.lock 鎖定，Python／PostgreSQL image 以 digest 固定；PostgreSQL driver 採 psycopg 3。確切版本見 README。request validation 使用標準函式庫的明確欄位檢查、regex、Decimal 與 frozen dataclass；目前七欄位不需要額外驗證套件。
 
 ## 程式分層
 
@@ -58,6 +58,8 @@ README.md
 新增與更新商品時，分類的取得或建立、商品欄位、尺寸與顏色異動都在同一筆交易完成。Service 在成功時 commit，失敗時 rollback；helper 不自行 commit。JSON response 在 commit 成功後回傳。
 
 查不到分類時建立分類；同時有兩個請求建立同名分類，需由唯一限制及衝突處理保證最終共用同一分類。重複商品 code 的判斷也要涵蓋 DB 寫入時的唯一限制衝突，不只在新增前查詢。
+
+ticket 02 以 PostgreSQL `INSERT ... ON CONFLICT DO NOTHING RETURNING` 取得新分類識別值；若分類已存在，再以獨立 SELECT 讀取。READ COMMITTED 下，第二個 statement 能看見等待結束後已提交的同名分類。只有 `pk_products` 的唯一限制衝突轉成 409，其他 DB 錯誤保留為 500。Service 在交易內產生商品回應資料，離開交易區塊、commit 成功後才交回 route，避免提交後為了序列化再次查詢。
 
 修改商品分類時只改商品的 `category_id`，不修改共用分類名稱。刪除商品清除其尺寸、顏色，保留分類。ORM relationship 的刪除設定需配合 DB cascade，並以整合測試驗證。
 
