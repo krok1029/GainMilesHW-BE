@@ -59,7 +59,7 @@ README.md
 
 查不到分類時建立分類；同時有兩個請求建立同名分類，需由唯一限制及衝突處理保證最終共用同一分類。重複商品 code 的判斷也要涵蓋 DB 寫入時的唯一限制衝突，不只在新增前查詢。
 
-ticket 02 以 PostgreSQL `INSERT ... ON CONFLICT DO NOTHING RETURNING` 取得新分類識別值；若分類已存在，再以獨立 SELECT 讀取。READ COMMITTED 下，第二個 statement 能看見等待結束後已提交的同名分類。只有 `pk_products` 的唯一限制衝突轉成 409，其他 DB 錯誤保留為 500。Service 在交易內產生商品回應資料，離開交易區塊、commit 成功後才交回 route，避免提交後為了序列化再次查詢。
+ticket 02 以 PostgreSQL `INSERT ... ON CONFLICT DO NOTHING RETURNING` 取得新分類物件；若分類已存在，再以獨立 SELECT 讀取。Service 建立商品時指定已載入的 Category；單筆查詢時明確載入分類、尺寸及顏色，避免 Schema 序列化時隱含查詢。READ COMMITTED 下，第二個 statement 能看見等待結束後已提交的同名分類。只有 `pk_products` 的唯一限制衝突轉成 409，其他 DB 錯誤保留為 500。Service 在交易內產生商品回應資料，離開交易區塊、commit 成功後才交回 route，避免提交後為了序列化再次查詢。
 
 修改商品分類時只改商品的 `category_id`，不修改共用分類名稱。刪除商品清除其尺寸、顏色，保留分類。ORM relationship 的刪除設定需配合 DB cascade，並以整合測試驗證。
 

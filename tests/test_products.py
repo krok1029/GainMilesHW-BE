@@ -336,3 +336,16 @@ def test_unstorable_unicode_is_rejected(
     )
     assert response.status_code == 422
     assert field in response.get_json()["error"]["fields"]
+
+
+@pytest.mark.parametrize("code", ["%00", "%20A-001", "A.001", "%E6%98%9F"])
+def test_invalid_url_code_returns_not_found(app: Flask, code: str) -> None:
+    response = app.test_client().get(f"/api/products/{code}")
+    assert response.status_code == 404
+    assert response.get_json() == {
+        "error": {
+            "code": "PRODUCT_NOT_FOUND",
+            "message": "Product not found.",
+            "fields": {},
+        }
+    }

@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import NoReturn
+from typing import NoReturn, TypeGuard
 
 from app.errors import ApiError
 from app.models import Product
@@ -22,6 +22,10 @@ def invalid_field(field: str, message: str) -> NoReturn:
     raise ApiError(
         422, "VALIDATION_ERROR", "Request validation failed.", {field: [message]}
     )
+
+
+def is_product_code(value: object) -> TypeGuard[str]:
+    return isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_-]+", value) is not None
 
 
 def trimmed_text(value: object, field: str) -> str:
@@ -62,7 +66,7 @@ def parse_product(body: object) -> NewProduct:
         raise ApiError(422, "VALIDATION_ERROR", "Request validation failed.", fields)
 
     code = body["code"]
-    if not isinstance(code, str) or re.fullmatch(r"[A-Za-z0-9_-]+", code) is None:
+    if not is_product_code(code):
         invalid_field(
             "code", "Must contain only ASCII letters, digits, hyphens or underscores."
         )

@@ -1,7 +1,7 @@
 from flask import Blueprint, Response, abort, jsonify, request, url_for
 
 from app.errors import ApiError
-from app.products.schemas import parse_product
+from app.products.schemas import is_product_code, parse_product
 from app.products.service import create_product, get_product
 
 products = Blueprint("products", __name__, url_prefix="/api/products")
@@ -20,7 +20,7 @@ def create() -> Response:
 
 @products.get("/<string:code>")
 def get(code: str) -> Response:
-    product = get_product(code)
+    product = get_product(code) if is_product_code(code) else None
     if product is None:
         raise ApiError(404, "PRODUCT_NOT_FOUND", "Product not found.")
     return jsonify(product)
