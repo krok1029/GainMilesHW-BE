@@ -125,5 +125,6 @@ docker compose down --volumes
 - [API contract](docs/api-contract.md)
 - [母規格](.scratch/product-catalog-api/spec.md)
 - [Ticket 01](.scratch/product-catalog-api/issues/01-container-startup-and-health.md)
+- [驗證紀錄](docs/verification.md)
 
 原作業要求使用 AI 時提供完整對話，提交前需一併附上。完整 CRUD、seed 與最終交付驗收仍屬後續 tickets。
