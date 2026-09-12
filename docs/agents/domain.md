@@ -6,7 +6,7 @@ This project has one context: the product catalog.
 
 - Read the root `CONTEXT.md` glossary and use its Product, Code, Category, Size, Color, Inventory, and Variant vocabulary.
 - Read relevant ADRs under `docs/adr/` when that directory exists. If it does not exist, proceed without creating placeholder ADRs.
-- The existing schema, architecture, and API design documents are under `doc/`; read the documents relevant to the task.
+- The existing schema, architecture, and API design documents are under `docs/`; read the documents relevant to the task.
 - The parent specification is tracked in `.scratch/product-catalog-api/spec.md`.
 
 ## Consumer rules
