@@ -111,3 +111,64 @@ docker compose -p gainmiles-ticket02-tests -f compose.test.yaml run --rm tests r
 ### 交付範圍
 
 已更新 README 的可呼叫範例、架構及 API 文件，ticket 02 的 13 項驗收完成。列表、PATCH、DELETE、seed 與整份作業最終交付仍由後續 tickets 完成。`main` 維持 `47fdb4a`，工作提交在功能分支，未 push 或建立 PR。驗證後清除本次專用測試容器。
+
+
+## Ticket 03 匯入範例資料並瀏覽商品目錄
+
+完成日期：2026-09-12。實作 commit：`a0468e1`；分支：`feat/flask-crud`。
+
+### 功能與測試
+
+新增 GET `/api/products` 與獨立 Flask CLI `seed-demo`。HTTP 建立與 seed 共用不自行 commit 的商品寫入 helper；seed 為整次匯入管理單一交易。列表明確載入分類及兩種選項集合，使用 Python 字串排序，避免依賴 DB collation。無新增 migration 或依賴。
+
+| 檢查 | 結果 |
+| --- | --- |
+| 空目錄列表 TDD | 先回傳 405；加入 collection GET 後回傳 200 與空 data 陣列 |
+| seed CLI TDD | 先找不到 seed-demo；實作後新增四筆商品並回報 4/0 |
+| 重複 seed TDD | 先因重複 code 非零退出；加入整筆跳過後回報 0/4 並保留資料 |
+| 列表單一測試檔 | 3 passed，涵蓋完整表示、大小寫／符號排序、30 筆商品的最多四次 SELECT 預算 |
+| seed 單一測試檔 | 9 passed，包含原始值與 2/4/9/6 資料列筆數、重跑、保留編輯內容、缺明細不修復、刪除後重建、不同分類 ID、啟動不自動 seed 及失敗回滾 |
+| 既有 API 交易單一測試檔 | 7 passed，共用 helper 後仍保有分類／code 競爭與回滾保證 |
+| 完整容器測試套件 | **153 passed**，包含 ticket 01、02 的全部案例 |
+| 容器內 mypy | 18 個 source files，無錯誤 |
+| 容器內 Ruff | app、tests、migrations 全部通過 |
+| 格式與文件 | 20 個 Python 檔案符合 Ruff format；Markdown 連結與 Git whitespace 檢查通過 |
+
+完整驗證指令：
+
+```bash
+docker compose -p gainmiles-ticket03-tests -f compose.test.yaml run --build --rm tests
+docker compose -p gainmiles-ticket03-tests -f compose.test.yaml run --rm tests mypy
+docker compose -p gainmiles-ticket03-tests -f compose.test.yaml run --rm tests ruff check app tests migrations
+```
+
+### 失敗匯入的證據
+
+測試在當次暫存 DB 的顏色表建立 AFTER INSERT trigger：第二筆範例商品 A-002 寫入時，確認 A-001、其兩種明細、A-002 與新分類已存在，再推進不隨 rollback 還原的測試 sequence 並丟出錯誤。
+
+CLI 非零退出且未印出成功筆數；sequence 證明已到達實際多筆寫入途中。失敗後列表與四張表筆數均等於匯入前，A-001／A-002 查詢皆為 404。兩種情境分別從空 DB 與保有自訂 B-001 的 DB 執行，確認本次新增全部回滾且既有商品不受影響。移除故障後重試成功。
+
+### 實際 Compose 操作
+
+使用獨立 `gainmiles-ticket03-smoke` 專案、新 DB volume 及隨機 API port 執行 `up --build --wait`，實際等待 migration 成功、Gunicorn healthy 後驗證：
+
+1. HTTP 列表回傳空 data，啟動沒有自動 seed。
+2. `docker compose exec -T api flask --app app seed-demo` 回報 `Created: 4; skipped: 0.`。
+3. Gunicorn HTTP 列表依序回傳 A-001、A-002、B-001、B-002，價格與庫存符合原始資料，尺寸合計 9 筆、顏色合計 6 筆。
+4. 同一 CLI 再執行一次回報 `Created: 0; skipped: 4.`，HTTP 列表完全不變。
+
+環境及鎖定版本沿用前兩張 tickets。驗證後僅清除本次測試與 smoke 專案的容器、網路及測試 volume。
+
+### Standards
+
+Reviewer 唯讀檢查 `bb5c5cf…a0468e1`，未發現違反專案文件的變更或有價值的 baseline smell。共用寫入 helper 不自行 commit、外層交易管理、列表載入及排序方式符合既有架構，無需新增抽象。
+
+### Spec
+
+另一位 reviewer 唯讀檢查同一範圍，未發現規格缺漏、範圍擴張或實作錯誤。原始資料、跳過策略、原子匯入、列表格式、排序與測試證據符合 ticket 03。
+
+兩軸 reviewer 未修改檔案或執行測試；上方結果由主代理實際執行。Standards：0 項；Spec：0 項，各軸均無最嚴重待修問題。
+
+### 交付範圍
+
+ticket 03 全部 11 項驗收完成。README、架構與 API 文件已更新；PATCH、DELETE 與作業最終交付仍屬後續 tickets。工作提交在 `feat/flask-crud`，`main` 保持 `47fdb4a`，未 push 或建立 PR。
