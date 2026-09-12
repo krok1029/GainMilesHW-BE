@@ -4,6 +4,7 @@ from app.errors import ApiError
 from app.products.schemas import is_product_code, parse_product, parse_product_changes
 from app.products.service import (
     create_product,
+    delete_product,
     get_product,
     list_products,
     patch_product,
@@ -44,3 +45,11 @@ def patch(code: str) -> Response:
     if not is_product_code(code):
         raise ApiError(404, "PRODUCT_NOT_FOUND", "Product not found.")
     return jsonify(patch_product(code, changes))
+
+
+@products.delete("/<string:code>")
+def delete(code: str) -> Response:
+    if not is_product_code(code):
+        raise ApiError(404, "PRODUCT_NOT_FOUND", "Product not found.")
+    delete_product(code)
+    return Response(status=204)

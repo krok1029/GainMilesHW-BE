@@ -1,6 +1,6 @@
 # 商品 API contract
 
-本文件記錄整體商品操作契約。ticket 02 至 04 已提供 POST 新增、單筆 GET、商品列表、PATCH 與共用錯誤處理；DELETE 尚待後續 ticket 實作。可執行範例見 [README](../README.md)。
+本文件記錄整體商品操作契約。ticket 02 至 05 已提供 POST 新增、單筆 GET、商品列表、PATCH、DELETE 與共用錯誤處理。可執行範例見 [README](../README.md)。
 
 ## 共通格式
 

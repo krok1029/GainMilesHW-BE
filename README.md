@@ -1,6 +1,6 @@
 # GainMiles 後端作業
 
-目前完成 ticket 01 至 04：容器與資料庫基礎環境、新增商品、單筆讀取與列表、部分更新、欄位驗證、共用 JSON 錯誤處理，以及獨立的 seed-demo。刪除由後續 ticket 實作。
+目前完成 ticket 01 至 05：容器與資料庫基礎環境、商品完整 CRUD、欄位驗證、共用 JSON 錯誤處理，以及獨立的 seed-demo。整份作業的最終交付驗收仍由 ticket 06 完成。
 
 ## 啟動
 
@@ -119,6 +119,25 @@ curl -i -X PATCH http://localhost:8000/api/products/A-001 \
 
 屬性、選項替換與新分類一起提交，寫入或 commit 失敗時全部 rollback。同一商品的重疊更新會依序讀取最新狀態，保留未提供欄位；同欄位採最後成功寫入的值。
 
+## 刪除商品
+
+先建立或 seed 商品，再依 code 刪除；DELETE 不需要 request body：
+
+```bash
+curl -i -X DELETE http://localhost:8000/api/products/A-001
+curl -i http://localhost:8000/api/products/A-001
+```
+
+刪除成功回傳 **204 No Content**，body 為空。商品及其所有尺寸、顏色在同一交易刪除；分類保留，即使已無商品引用也不移除。同分類其他商品與明細不受影響。
+
+後續 GET、再次 DELETE，或刪除未知 code 都回傳 404：
+
+```json
+{"error":{"code":"PRODUCT_NOT_FOUND","message":"Product not found.","fields":{}}}
+```
+
+未預期的刪除或 commit 失敗會回傳共用 500，整筆交易 rollback，原商品及明細仍完整可讀。若刪除的是四筆範例商品之一，之後再執行 seed-demo 會依原始值重建該商品。
+
 ## 版本與設定
 
 Python image 內版本為 3.13.15，PostgreSQL image 內版本為 18.6；兩者以 manifest digest 固定。PostgreSQL 18 的 volume 掛在 `/var/lib/postgresql`。
@@ -197,6 +216,14 @@ docker compose -p gainmiles-tests -f compose.test.yaml run --rm tests pytest -q 
 
 測試使用 POST 準備商品，再以 PATCH 與單筆 GET 驗證，不依賴 seed、列表或刪除 API。交易測試在選項刪除途中與 commit 階段注入故障，確認原屬性、明細及分類保留；競爭測試確認新分類共用、同商品最後寫入值，以及等待中的更新能看見前一交易新建的分類。
 
+DELETE 的單一測試入口：
+
+```bash
+docker compose -p gainmiles-tests -f compose.test.yaml run --rm tests pytest -q tests/test_delete_product.py
+```
+
+測試以 POST 建立商品，再經 DELETE／單筆 GET 驗證。窄範圍 DB 檢查確認目標明細已清除、分類仍存在；測試用 trigger 分別在明細 cascade 途中與 commit 階段製造失敗，驗證原商品及其他共用分類商品保留。這些測試不依賴列表、seed 或 PATCH。
+
 Compose 啟動驗收從主機執行，不需要主機 Python：
 
 ```bash
@@ -250,6 +277,7 @@ docker compose down --volumes
 - [Ticket 02](.scratch/product-catalog-api/issues/02-create-and-read-product.md)
 - [Ticket 03](.scratch/product-catalog-api/issues/03-seed-and-list-catalog.md)
 - [Ticket 04](.scratch/product-catalog-api/issues/04-patch-product-and-options.md)
+- [Ticket 05](.scratch/product-catalog-api/issues/05-delete-product-and-details.md)
 - [驗證紀錄](docs/verification.md)
 
-原作業要求使用 AI 時提供完整對話，提交前需一併附上。刪除與最終交付驗收仍屬後續 tickets。
+原作業要求使用 AI 時提供完整對話，提交前需一併附上。最終交付驗收仍屬 ticket 06。

@@ -1,5 +1,5 @@
 from psycopg.errors import UniqueViolation
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload, selectinload
@@ -128,3 +128,13 @@ def patch_product(code: str, changes: ProductChanges) -> dict[str, object]:
         db.session.flush()
         result = serialize_product(product)
     return result
+
+
+def delete_product(code: str) -> None:
+    with db.session.begin():
+        # The database cascades both option tables in the same transaction.
+        deleted_code = db.session.scalar(
+            delete(Product).where(Product.code == code).returning(Product.code)
+        )
+        if deleted_code is None:
+            raise ApiError(404, "PRODUCT_NOT_FOUND", "Product not found.")

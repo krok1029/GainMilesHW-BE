@@ -1,6 +1,6 @@
 # 後端技術架構
 
-本文件記錄已確認的技術與執行流程。ticket 01 已實作 Flask health、Docker Compose、四張表的 migration 與測試入口；ticket 02 已實作新增商品、依 code 讀取與共用錯誤處理。ticket 03 已提供商品列表與 seed-demo。ticket 04 已提供 PATCH 部分更新與選項替換。刪除尚待後續 ticket 完成。目前可用的指令見 [README](../README.md)，本文保留整體目標架構。
+本文件記錄已確認的技術與執行流程。ticket 01 已實作 Flask health、Docker Compose、四張表的 migration 與測試入口；ticket 02 已實作新增商品、依 code 讀取與共用錯誤處理。ticket 03 已提供商品列表與 seed-demo。ticket 04 已提供 PATCH 部分更新與選項替換。ticket 05 已提供刪除商品與明細。最終交付驗收尚待 ticket 06 完成。目前可用的指令見 [README](../README.md)，本文保留整體目標架構。
 
 ## 技術與分工
 
@@ -61,7 +61,7 @@ README.md
 
 ticket 02 以 PostgreSQL `INSERT ... ON CONFLICT DO NOTHING RETURNING` 取得新分類物件；若分類已存在，再以獨立 SELECT 讀取。Service 建立商品時指定已載入的 Category；單筆查詢時明確載入分類、尺寸及顏色，避免 Schema 序列化時隱含查詢。READ COMMITTED 下，第二個 statement 能看見等待結束後已提交的同名分類。只有 `pk_products` 的唯一限制衝突轉成 409，其他 DB 錯誤保留為 500。Service 在交易內產生商品回應資料，離開交易區塊、commit 成功後才交回 route，避免提交後為了序列化再次查詢。
 
-修改商品分類時只改商品的 `category_id`，不修改共用分類名稱。刪除商品清除其尺寸、顏色，保留分類。ORM relationship 的刪除設定需配合 DB cascade，並以整合測試驗證。
+修改商品分類時只改商品的 `category_id`，不修改共用分類名稱。刪除商品清除其尺寸、顏色，保留分類。DELETE 使用 SQLAlchemy 的 `DELETE ... RETURNING code`，同一 statement 判斷商品是否存在，不先載入明細。兩種明細由既有 PostgreSQL 外鍵 `ON DELETE CASCADE` 清除，符合 relationship 的 passive delete 設定；整筆交易提交後才回傳 204。HTTP 與 DB 整合測試已驗證明細清除、分類保留及失敗回滾。
 
 商品列表批次載入分類、尺寸、顏色，避免每筆商品各查明細。兩個集合不直接展開後加總庫存，避免交叉乘積。列表以 joinedload 載入單一分類，使用 `selectinload()` 批次載入兩種集合，再於 Python 依 code 排序。
 
