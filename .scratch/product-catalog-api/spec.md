@@ -2,6 +2,8 @@
 
 Status: ready-for-agent
 
+Completed: 2026-09-12；tickets 01–06 已完成。原規格保留規劃當時的敘述，實際交付與驗證見 [驗證紀錄](../../docs/verification.md)、[單一總 PR 草稿](../../docs/pr-summary.md)。AI 對話依使用者指定的 [分享來源](../../docs/ai-conversation.md) 交付。
+
 ## Problem Statement
 
 作業提交者需要根據題目的商品表，完成可透過 JSON 建立、讀取、更新及刪除商品的 Python 後端，並讓評閱者能在自己的電腦重現執行環境。原始資料將多個尺寸及顏色放在同一格，若直接儲存，容易重複商品屬性或錯誤分配庫存。

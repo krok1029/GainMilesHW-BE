@@ -15,7 +15,15 @@ Base：`main`；Head：`feat/flask-crud`。下列內容可作為整份作業的 
 
 ## 驗證
 
-最終執行結果見 [驗證紀錄](verification.md)。主要可重跑指令：
+2026-09-12 最終驗證：
+
+- 完整容器 pytest：**276 passed**，真實 PostgreSQL，每個情境使用獨立暫存 DB。
+- 容器 mypy：22 個 source files 無錯誤；Ruff 全部通過。
+- `verify-startup.sh`：migration／health 順序、DB 中斷恢復及首次 migration 失敗阻止啟動均通過。
+- `verify-handoff.sh`：精確 seed、實際 HTTP CRUD、持久化、更新失敗保持 API 停止、明確恢復與 volume 重設均通過。
+- Ticket 06 Standards／Spec 雙軸 review 均無待修問題；各功能的 review 與已修正事項見紀錄。
+
+詳細結果見 [驗證紀錄](verification.md)。主要可重跑指令：
 
 ```bash
 sh tests/verify-startup.sh
@@ -33,4 +41,4 @@ docker compose -p gainmiles-tests -f compose.test.yaml down --volumes
 - [母規格](../.scratch/product-catalog-api/spec.md) 與各功能 ticket 的完成紀錄。
 - [AI 對話分享來源](ai-conversation.md)：使用提交者指定的對話連結，保留分享快照的範圍說明。
 
-作業範圍未包含驗證登入、訂單／扣庫存、分頁或 production 部署。各功能與驗證紀錄以獨立 commits 累積於同一功能分支，main 保持原始共同基底。
+作業範圍未包含身分驗證、訂單／扣庫存、分頁或 production 部署。各功能與驗證紀錄以獨立 commits 累積於同一功能分支，main 保持原始共同基底。

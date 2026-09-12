@@ -280,3 +280,79 @@ Reviewer 唯讀檢查 `ca15dfe…ca3e930`，無硬性標準違反或需要提出
 ### 交付範圍
 
 ticket 05 全部 7 項驗收完成，商品 CRUD 已實作，README、架構與 API 文件同步更新。整份作業的最終交付驗收仍屬 ticket 06，不能以本次測試代替。本次專用測試容器於驗證後清除。工作提交在 `feat/flask-crud`，`main` 保持 `47fdb4a`，未 push 或建立 PR。
+
+
+## Ticket 06 完成可重現的作業交付
+
+完成日期：2026-09-12。實作 commit：`facaafc`；分支：`feat/flask-crud`。
+
+### 交付內容
+
+新增 `scripts/update-environment.sh`、`tests/verify-handoff.sh` 及在容器內經 HTTP 驗證的 `tests/handoff_client.py`。README 補齊更新失敗的 log 取得方式、完整交付驗收及 AI 對話來源；`docs/pr-summary.md` 提供整份作業適用的單一總 PR 草稿。應用程式與 schema 未因本 ticket 更動。
+
+### 實際結果
+
+| 檢查 | 結果 |
+| --- | --- |
+| 更新流程 TDD | 首輪 handoff 先通過 CRUD／持久化，但因缺少更新腳本以 exit 127 失敗；實作更新入口後整份 handoff exit 0 |
+| 完整容器 pytest | **276 passed**，新獨立 Compose 測試環境，12.65 秒 |
+| 容器內 mypy | 22 個 source files，無錯誤 |
+| 容器內 Ruff | app、tests、migrations 全部通過 |
+| 格式／shell／文件 | 24 個 Python 檔案符合 Ruff format；新增 shell scripts 的 `sh -n`、Markdown 連結及 Git whitespace 檢查通過 |
+| Startup 操作驗收 | exit 0，四個 PASS：就緒順序、共用 image 與重複 migration、DB 中斷恢復、首次 migration 失敗不啟動 API |
+| Handoff 操作驗收 | exit 0，完整 CRUD、精確 seed、資料持久化、更新故障／恢復及資料重設全部通過 |
+| Docker／Compose | Docker Engine 28.4.0，Compose 2.39.2-desktop.1；應用與 DB 使用既有鎖定 images 及 uv.lock |
+
+本輪實際執行：
+
+```bash
+sh tests/verify-startup.sh
+sh tests/verify-handoff.sh
+docker compose -p gainmiles-ticket06-tests -f compose.test.yaml run --build --rm tests
+docker compose -p gainmiles-ticket06-tests -f compose.test.yaml run --rm tests mypy
+docker compose -p gainmiles-ticket06-tests -f compose.test.yaml run --rm tests ruff check app tests migrations
+```
+
+### 乾淨環境與 CRUD
+
+Handoff 腳本複製 `.env.example` 到暫存 env file，以自動產生的 project、全新 DB volume 與隨機 API port 啟動。驗證 migration 成功退出、health 就緒及空目錄後，獨立執行 seed-demo，回報新增 4、跳過 0，逐筆比對四個商品的全部七欄位原始值。
+
+接著透過實際 Gunicorn HTTP 建立 C-001、讀回、PATCH 選項與庫存、DELETE 並確認 404，亦驗證重複 code 409 與修改 code 422。操作使用容器內 Python 標準函式庫，從主機經 stdin 傳入驗證程式，不依賴主機 Python 或已有套件。
+
+### 資料保留與 seed
+
+將 A-001 的名稱、分類、價格、庫存及兩種選項全部改為自訂內容，再刪除 B-002。每個階段逐筆比對完整目錄：
+
+1. 正常 restart API 後，編輯內容與 B-002 的缺少狀態保持不變。
+2. build 後 force-recreate API，確認 container ID 已改變，資料仍相同。
+3. `down` 不刪 volume，再 `up --wait`，資料仍相同，沒有自動 seed。
+4. 手動 seed 回報新增 1、跳過 3，只補回 B-002；A-001 的所有編輯保留。
+5. 再 seed 回報新增 0、跳過 4，完整目錄不變。
+
+### 既有環境更新與失敗
+
+更新腳本以 `set -eu` 依序停止 API、build、執行一次性 migration，再於成功後啟動 API。成功路徑後完整目錄保持不變。
+
+驗收以 Compose override 將 migration 指令改為不存在的 `missing_handoff_test_revision`，呼叫相同更新入口。結果非零退出，原 API container 為 exited；捕捉的更新輸出包含找不到 revision 的診斷。透過一次性 CLI 查詢 `db current`，確認版本與失敗前完全相同，沒有自動 downgrade 或重啟原 API。
+
+移除故障 override 後明確重跑更新腳本，服務恢復且完整編輯內容保留。最後只對本次驗收 project 執行 `down --volumes` 再啟動，得到重新建表後的空目錄，確認資料重設與保留資料的 down 有明確差別。
+
+### AI 對話
+
+依本輪使用者指示，採用指定的 [AI 對話分享頁](https://chatgpt.com/s/cx_6aa513c2f92081918a49b17929d983f7)。一般網頁抓取工具未能取得頁面，改用 Chrome 後已確認可讀，標題為「設計 PostgreSQL 正規化 Schema」，內容從最初討論至 ticket 05 完成與 ticket 06 開始。
+
+分享快照不會自動包含本輪後續訊息；[AI 對話來源說明](ai-conversation.md) 已揭露這個範圍，沒有產生或宣稱本地摘要為完整對話。本次依指定連結交付，不擅自替換來源。
+
+### Standards
+
+Reviewer 唯讀檢查 `5692dc8…facaafc`，無文件標準違反或值得修改的 baseline smell。公開 CLI／HTTP 驗收沒有侵入應用程式分層；更新順序符合既有架構。少量驗收流程重複各自服務不同情境，無需額外抽象。
+
+### Spec
+
+另一位 reviewer 唯讀核對相同範圍與實際 handoff log，無缺漏、範圍擴張或錯誤實作。持久化比對涵蓋完整商品資料，migration 故障停止及恢復證據充分；AI 連結與快照揭露符合本輪使用者指示。
+
+兩軸 reviewer 未修改檔案或重跑測試；上方結果由主代理實際執行。Standards：0 項；Spec：0 項，各軸均無最嚴重待修問題。
+
+### 最終交付狀態
+
+Tickets 01 至 06 已完成；AI 對話依指定分享快照交付。所有變更維持在 `feat/flask-crud`，`main` 為 `47fdb4a`，以功能分組提交。總 PR 草稿包含變更與驗證摘要，本次沒有 push、建立 PR 或 merge。Startup／handoff 腳本已清除各自建立的驗收容器、網路與 volumes；最終 pytest 的專用 DB 亦於完成後清除。
