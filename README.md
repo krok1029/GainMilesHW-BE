@@ -41,4 +41,4 @@ docker compose down
 - [DB schema](docs/db-schema.md)：Mermaid 關聯圖與資料限制。
 - [API 文件](docs/api-contract.md)：路由、欄位驗證、錯誤格式與操作範例。
 
-[原始作業題目](<docs/GainMiles Python Online Test (2026).docx>) · [AI 對話連結](https://chatgpt.com/s/cx_6aa513c2f92081918a49b17929d983f7)（依提交者指定，分享快照截至 ticket 06 開始；後續訊息不會自動加入）。
+[原始作業題目](<docs/GainMiles Python Online Test (2026).docx>) · [AI 對話連結](https://chatgpt.com/s/cx_6aa63d38bc788191b8d2697ad819a7c0)（依提交者指定，分享快照截至 ticket 06 開始；後續訊息不會自動加入）。
