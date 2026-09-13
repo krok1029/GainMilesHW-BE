@@ -26,4 +26,4 @@
 
 全部 11 項驗收已完成。完整容器測試 153 passed，mypy 與 Ruff 通過；獨立 Compose 環境實測空目錄、CLI 匯入四筆商品、HTTP 列表與重複 seed。Standards／Spec 雙軸 code-review 均無 actionable findings。Status 保留原 triage 分類，Completed 與已勾選驗收項目表示本 ticket 已完成。
 
-操作範例見 [README](../../../README.md)，詳細證據見 [驗證紀錄](../../../docs/verification.md)。
+操作範例見 [API 文件](../../../docs/api-contract.md)，測試指令與整體結果見 [技術架構](../../../docs/architecture.md)。

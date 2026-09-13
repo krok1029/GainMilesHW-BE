@@ -26,4 +26,4 @@
 
 全部 11 項驗收已完成。完整容器測試 23 passed，mypy 與 Ruff 通過；實際 Compose 驗證涵蓋成功啟動、重複 migration、DB 中斷／恢復與 migration 失敗阻止 API 啟動。Standards／Spec 雙軸 code-review 皆無 actionable findings。Status 保留原 triage 分類，Completed 與已勾選驗收項目表示本 ticket 已完成。
 
-詳細證據見 [驗證紀錄](../../../docs/verification.md)。
+測試指令與整體結果見 [技術架構](../../../docs/architecture.md)。

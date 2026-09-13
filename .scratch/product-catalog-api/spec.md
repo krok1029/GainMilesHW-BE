@@ -2,7 +2,7 @@
 
 Status: ready-for-agent
 
-Completed: 2026-09-12；tickets 01–06 已完成。原規格保留規劃當時的敘述，實際交付與驗證見 [驗證紀錄](../../docs/verification.md)、[單一總 PR 草稿](../../docs/pr-summary.md)。AI 對話依使用者指定的 [分享來源](../../docs/ai-conversation.md) 交付。
+Completed: 2026-09-12；tickets 01–06 已完成。原規格保留規劃當時的敘述，實際交付見 [README](../../README.md)，測試指令與整體結果見 [技術架構](../../docs/architecture.md)。AI 對話依 README 中的使用者指定分享連結交付。
 
 ## Problem Statement
 

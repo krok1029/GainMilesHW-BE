@@ -1,6 +1,6 @@
-# 商品 API contract
+# 商品 API 文件
 
-本文件記錄整體商品操作契約。ticket 02 至 05 已提供 POST 新增、單筆 GET、商品列表、PATCH、DELETE 與共用錯誤處理。可執行範例見 [README](../README.md)。
+提供商品新增、列表、單筆讀取、部分更新與刪除。環境啟動方式見 [README](../README.md)。
 
 ## 共通格式
 
@@ -20,7 +20,7 @@ DB 的尺寸、顏色明細在 JSON 中分別輸出 `sizes`、`colors` 陣列；
 | PATCH | `/api/products/{code}` | 部分更新商品 | 200，回傳更新後商品 |
 | DELETE | `/api/products/{code}` | 刪除商品與明細 | 204，無 response body |
 
-本版列表以 code 升冪回傳全部商品，不提供篩選或分頁；適用於本作業的小型資料集。單筆不存在時 GET、PATCH、DELETE 都回傳 404。
+本版列表以 code 升冪回傳全部商品，不提供篩選或分頁；適用於本作業的小型資料集。單筆不存在時 GET、PATCH、DELETE 都回傳 404。刪除會一併清除尺寸與顏色，保留共用分類；再次刪除同一商品回傳 404。
 
 ## 新增與商品回應
 
@@ -89,7 +89,7 @@ POST 必須包含全部七個欄位。未知欄位、`null`、非 object JSON bo
     "code": "VALIDATION_ERROR",
     "message": "Request validation failed.",
     "fields": {
-      "inventory": ["Must be a non-negative integer."]
+      "inventory": ["Must be an integer from 0 to 2147483647."]
     }
   }
 }
@@ -110,13 +110,31 @@ POST 必須包含全部七個欄位。未知欄位、`null`、非 object JSON bo
 
 處理順序：確認媒體類型與 JSON 可解析 → 驗證 body → 執行商品操作。只有通過 request 驗證後，才進行商品存在性與 DB 衝突判斷。
 
-## 最小驗收案例
+## 操作範例
 
-- 空資料庫新增含新分類的商品可成功，不必先 seed。
-- POST 後 GET 可完整讀回商品；金額固定兩位小數字串、集合按規則排序。
-- PATCH 只改 inventory 不影響其他欄位；替換 sizes 會移除舊尺寸。
-- 修改某商品的 category 不影響同分類其他商品。
-- 拒絕重複 code、修改 code、空集合、重複集合值、null、負庫存及 boolean 庫存。
-- 拒絕價格超過兩位小數，且原資料保持不變。
-- DELETE 後商品與兩種明細都不存在；再次 DELETE 回傳 404。
-- DB 更新中途失敗時，商品、分類建立及明細異動全部 rollback。
+服務預設為 `http://localhost:8000`。以下以範例資料以外的 `DEMO-001` 示範完整 CRUD；若曾建立同代碼而未刪除，POST 會回傳 409。
+
+```bash
+# 新增：201，Location: /api/products/DEMO-001
+curl -i http://localhost:8000/api/products \
+  -H 'Content-Type: application/json' \
+  -d '{"code":"DEMO-001","name":"Demo","category":"cloth","sizes":["S","M"],"unit_price":"200.00","inventory":20,"colors":["Blue"]}'
+
+# 列表與單筆：200
+curl -i http://localhost:8000/api/products
+curl -i http://localhost:8000/api/products/DEMO-001
+
+# 更新庫存與替換尺寸：200
+curl -i -X PATCH http://localhost:8000/api/products/DEMO-001 \
+  -H 'Content-Type: application/json' \
+  -d '{"inventory":12,"sizes":["L"]}'
+
+# 無效庫存：422 VALIDATION_ERROR，資料維持不變
+curl -i -X PATCH http://localhost:8000/api/products/DEMO-001 \
+  -H 'Content-Type: application/json' \
+  -d '{"inventory":-1}'
+
+# 刪除：204；刪除後讀取：404 PRODUCT_NOT_FOUND
+curl -i -X DELETE http://localhost:8000/api/products/DEMO-001
+curl -i http://localhost:8000/api/products/DEMO-001
+```

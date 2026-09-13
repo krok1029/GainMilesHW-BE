@@ -1,133 +1,89 @@
-# 後端技術架構
+# 技術架構
 
-本文件記錄已確認的技術與執行流程。ticket 01 已實作 Flask health、Docker Compose、四張表的 migration 與測試入口；ticket 02 已實作新增商品、依 code 讀取與共用錯誤處理。ticket 03 已提供商品列表與 seed-demo。ticket 04 已提供 PATCH 部分更新與選項替換。ticket 05 已提供刪除商品與明細。ticket 06 提供既有環境更新腳本、可重跑的交付驗收與 AI 對話來源。目前可用的指令見 [README](../README.md)，本文保留整體目標架構。
+## 元件與分層
 
-## 技術與分工
-
-| 元件 | 決定 |
+| 元件 | 用途 |
 | --- | --- |
-| HTTP application | Flask，使用 `create_app()` 與商品 Blueprint |
-| ORM | Flask-SQLAlchemy 整合 SQLAlchemy 2.x |
-| Database | PostgreSQL；表結構見 [DB schema](db-schema.md) |
-| Migration | Flask-Migrate／Alembic，migration 檔案納入版本控制 |
-| Container application server | Gunicorn |
-| 環境啟動 | Docker Compose，同時執行 API 與 PostgreSQL |
-| 測試 | pytest，DB 整合測試使用獨立 PostgreSQL 測試資料庫 |
+| Python 3.13／Flask | Application factory `create_app()` 與商品 Blueprint |
+| Flask-SQLAlchemy／SQLAlchemy 2.x | ORM、查詢與交易；以 psycopg 3 連接 PostgreSQL 18 |
+| Flask-Migrate／Alembic | 套用納入版本控制的 schema migration |
+| Gunicorn | 容器內的 HTTP application server |
+| Docker Compose | 管理 API、migration 與資料庫的啟動順序 |
+| pytest／mypy／Ruff | PostgreSQL 整合測試、型別及程式碼檢查 |
 
-套件由 uv.lock 鎖定，Python／PostgreSQL image 以 digest 固定；PostgreSQL driver 採 psycopg 3。確切版本見 README。request validation 使用標準函式庫的明確欄位檢查、regex、Decimal 與 frozen dataclass；目前七欄位不需要額外驗證套件。
-
-## 程式分層
+Python 套件由 [uv.lock](../uv.lock) 鎖定，容器 image 以 digest 固定。設定入口為 [.env.example](../.env.example)，包含 `POSTGRES_USER`、`POSTGRES_PASSWORD`、`POSTGRES_DB` 與 `API_PORT`。
 
 ```text
-Routes → Schemas → Service → SQLAlchemy Models → PostgreSQL
+HTTP → Routes → Schemas（驗證）→ Service → SQLAlchemy Models → PostgreSQL
+            ← Schemas（序列化）←
 ```
 
-- Routes：讀取 HTTP 請求，呼叫驗證與 Service，轉成 response/status code。
-- Schemas：驗證 request，產生固定 JSON 結構；不查資料庫、不 commit。
-- Service：完成商品操作，執行查詢並管理一次操作的交易。
-- Models：定義四張表、relationship、主鍵、外鍵、唯一與 CHECK constraints。
-- Errors：將已知錯誤轉為一致 JSON；未知錯誤記錄到容器 log，回傳一般化的 500 訊息。
+- `app/products/routes.py`：處理 HTTP request、response 與 status code。
+- `app/products/schemas.py`：驗證欄位、以 Decimal 處理金額並序列化回應，不查 DB 或 commit。
+- `app/products/service.py`：查詢與商品操作，管理一次操作的交易；直接使用 SQLAlchemy。
+- `app/models.py`：四張表的關聯與 constraints，見 [DB schema](db-schema.md)。
+- `app/errors.py`：統一 JSON 錯誤，未知錯誤寫入 log，對外隱藏 SQL 與 traceback。
 
-目前 Service 直接使用 SQLAlchemy，未拆 Repository。使用 SQLAlchemy 2.x 的 `select()` 與 session API。
+## 資料一致性
 
-## 主要目錄
+新增與更新的分類、商品、尺寸及顏色在同一筆交易內完成；成功 commit 後才回傳，失敗全部 rollback。共用 helper 不自行 commit。
 
-```text
-app/
-├── __init__.py
-├── extensions.py
-├── errors.py
-├── health.py
-├── json.py
-├── models.py
-├── seed.py
-└── products/
-    ├── routes.py
-    ├── schemas.py
-    └── service.py
-migrations/
-tests/
-Dockerfile
-compose.yaml
-.env.example
-pyproject.toml
-README.md
+分類依名稱取得或建立，以唯一限制與 `INSERT ... ON CONFLICT DO NOTHING RETURNING` 處理競爭；未新增時再以獨立 SELECT 取得既有分類。只有商品主鍵的唯一限制衝突轉為 409。修改分類只改商品引用，不改共用分類名稱。
+
+PATCH 先以 `SELECT FOR UPDATE` 鎖住商品，再載入分類與選項，確保等待鎖後讀取到已提交的關聯。傳入的選項集合整組替換，未傳欄位保留；同一欄位採最後成功寫入的值。庫存代表每個商品的總量，沒有訂單、預留或扣庫存流程。
+
+DELETE 使用 `DELETE ... RETURNING` 判斷商品是否存在，由外鍵級聯刪除尺寸與顏色，保留分類。列表以 joinedload 載入分類、selectinload 批次載入選項，避免每筆各查明細；回應排序與驗證規則見 [API 文件](api-contract.md)。
+
+## 容器、migration 與 seed
+
+```mermaid
+flowchart LR
+    db[PostgreSQL healthy] --> migrate[Migration exit 0]
+    migrate --> api[Gunicorn API healthy]
 ```
 
-## 交易與查詢
+`migrate` 與 `api` 共用 application image 與 DB 設定。初次啟動依 `service_healthy`、`service_completed_successfully` 等待前置服務；migration 失敗時 API 不啟動。migration 只套用已提交版本，不在啟動時 autogenerate 或呼叫 `create_all()`。
 
-新增與更新商品時，分類的取得或建立、商品欄位、尺寸與顏色異動都在同一筆交易完成。Service 在成功時 commit，失敗時 rollback；helper 不自行 commit。JSON response 在 commit 成功後回傳。
+容器以 hostname `db` 連線，資料庫不發布主機 port；PostgreSQL named volume 掛載於 `/var/lib/postgresql`。API 在容器內綁定 `0.0.0.0:8000`，主機只發布至 loopback。
 
-查不到分類時建立分類；同時有兩個請求建立同名分類，需由唯一限制及衝突處理保證最終共用同一分類。重複商品 code 的判斷也要涵蓋 DB 寫入時的唯一限制衝突，不只在新增前查詢。
+`GET /health` 在 DB 可查詢時回傳 200 與 `{"status":"ok"}`，不可用時回傳 503 與 `{"status":"unavailable"}`。空表可正常啟動。
 
-ticket 02 以 PostgreSQL `INSERT ... ON CONFLICT DO NOTHING RETURNING` 取得新分類物件；若分類已存在，再以獨立 SELECT 讀取。Service 建立商品時指定已載入的 Category；單筆查詢時明確載入分類、尺寸及顏色，避免 Schema 序列化時隱含查詢。READ COMMITTED 下，第二個 statement 能看見等待結束後已提交的同名分類。只有 `pk_products` 的唯一限制衝突轉成 409，其他 DB 錯誤保留為 500。Service 在交易內產生商品回應資料，離開交易區塊、commit 成功後才交回 route，避免提交後為了序列化再次查詢。
+`seed-demo` 是獨立 Flask CLI，在單一交易中新增缺少的四筆範例商品，分類依名稱解析。已存在的 code 整筆跳過，不覆蓋或修補；刪除範例後再 seed 會重建該筆。CLI 回報新增／跳過數，失敗 rollback 並以非零狀態結束。啟動與 seed 指令見 [README](../README.md)。
 
-修改商品分類時只改商品的 `category_id`，不修改共用分類名稱。刪除商品清除其尺寸、顏色，保留分類。DELETE 使用 SQLAlchemy 的 `DELETE ... RETURNING code`，同一 statement 判斷商品是否存在，不先載入明細。兩種明細由既有 PostgreSQL 外鍵 `ON DELETE CASCADE` 清除，符合 relationship 的 passive delete 設定；整筆交易提交後才回傳 204。HTTP 與 DB 整合測試已驗證明細清除、分類保留及失敗回滾。
+## 更新與排查
 
-商品列表批次載入分類、尺寸、顏色，避免每筆商品各查明細。兩個集合不直接展開後加總庫存，避免交叉乘積。列表以 joinedload 載入單一分類，使用 `selectinload()` 批次載入兩種集合，再於 Python 依 code 排序。
-
-PATCH 使用與新增相同的欄位驗證，明確區分欄位未傳入與非法 null。交易內先以 `SELECT FOR UPDATE` 鎖住商品，再分別載入分類、尺寸與顏色；關聯查詢在取得鎖後執行，避免等待前的 JOIN snapshot 看不到前一筆交易剛建立的分類。選項替換保留交集中的既有 ORM 明細、移除其餘明細並新增缺少值。分類解析沿用新增與 seed 使用的 `resolve_category`，helper 不自行 commit。
-
-本作業 inventory 是總數的直接編輯，不包含訂單、預留或扣庫存流程。若兩個請求同時修改同一欄位，本版採最後成功寫入的值，不增加版本鎖。
-
-## Compose 與啟動流程
-
-| Service | 工作 | 生命週期 |
-| --- | --- | --- |
-| `db` | PostgreSQL，named volume 保存資料 | 持續執行 |
-| `migrate` | `flask --app app db upgrade` | 成功或失敗後退出，不自動重啟 |
-| `api` | Gunicorn 執行 `app:create_app()` | 持續執行 |
-
-`migrate` 與 `api` 共用同一份 application image，使用相同 DB 設定。
-
-啟動順序：`db` healthcheck 成功 → `migrate` 完成且 exit code 為 0 → `api` 啟動。Compose 分別使用 `service_healthy` 與 `service_completed_successfully`。
-
-容器連 PostgreSQL 使用 service hostname `db`，而非 `localhost`。DB volume 掛載位置依選定的 PostgreSQL image 版本設定。API 綁定 `0.0.0.0`；環境設定由 Compose 傳入。
-
-API 提供 `GET /health`：可查詢 DB 時回傳 200 與 `{"status":"ok"}`，DB 不可用時回傳 503 與 `{"status":"unavailable"}`。healthcheck 不要求存在 seed 資料。空表是合法啟動狀態。
-
-首次啟動與 seed 指令：
+既有環境更新時執行：
 
 ```bash
-docker compose up --build --wait
-docker compose exec api flask --app app seed-demo
+sh scripts/update-environment.sh
 ```
 
-Compose 的 `--wait`、一次性 migration service 與 healthcheck 配合已於 ticket 01 驗證；seed 可在 schema 就緒後獨立執行。
+腳本依序停止 API、build、執行 migration，成功才啟動 API 並等待 health。任一步驟失敗皆停止流程，API 保持停止；migration 錯誤直接顯示在指令輸出，不自動 downgrade。可附加 Compose 選項，例如 `sh scripts/update-environment.sh --env-file .env -p gainmiles`。
 
-更新既有環境的流程為：停止 API → 建置新 application image → 明確執行 migration → 成功後啟動新 API。失敗時保留 API 停止狀態並查閱 migration 指令輸出；不自動執行 downgrade。`scripts/update-environment.sh` 以遇錯停止的 shell 流程實作此順序，接受 Compose 選項以沿用指定 project 與 env file。
+`depends_on` 不會因 DB 後續故障而自動停止既有 API；`docker compose restart` 不會套用新的 schema 或環境設定。
 
-`depends_on` 管理啟動順序，不會因後續 migration 或 DB 失敗，自動停止原本已執行的 API。`docker compose restart` 也不作為 schema 或設定更新流程。
+```bash
+docker compose ps -a
+docker compose logs api db migrate
+docker compose run --rm migrate flask --app app db current
+```
 
-## Migration 與 seed
+需要清空資料重新開始時，執行 `docker compose down --volumes`；此指令會刪除專案的 PostgreSQL volume 與全部資料。之後依 README 重新啟動及 seed。
 
-開發時產生 migration，人工檢查主外鍵、CHECK、索引與級聯行為後提交。執行環境只套用已提交的 migration；不在啟動時自動產生版本，不使用 `create_all()` 取代 migration。
+## 測試
 
-`app/seed.py` 實作獨立 seed 邏輯，註冊為 `seed-demo` Flask CLI，沿用 app configuration 與 SQLAlchemy models。HTTP 建立與 seed 共用 Service 的 `add_product`，該 helper 只加入並 flush 分類、商品及明細，不自行 commit。HTTP 的 create operation 與 seed 各自管理外層交易。
+在獨立 Compose 專案執行，不使用開發資料庫：
 
-- 資料來源為題目四筆商品；分類依名稱取得，不假設固定的 category_id。
-- 在一筆交易中寫入所有缺少的範例商品與其明細。
-- 商品 code 已存在時，整個商品跳過；不覆蓋名稱、分類、單價、庫存或明細。
-- 印出新增及跳過商品筆數。失敗 rollback 並以非零 exit code 結束。
-- 刪除範例商品後再 seed，會重新建立該商品；seed 不代表同步或重設所有現有資料。
-- seed 不會隨 API 容器重啟自動執行。
+```bash
+docker compose -p gainmiles-tests -f compose.test.yaml run --build --rm tests
+docker compose -p gainmiles-tests -f compose.test.yaml run --rm tests mypy
+docker compose -p gainmiles-tests -f compose.test.yaml run --rm tests ruff check app tests migrations
+docker compose -p gainmiles-tests -f compose.test.yaml run --rm tests ruff format --check app tests migrations
+docker compose -p gainmiles-tests -f compose.test.yaml down --volumes
+sh tests/verify-startup.sh
+sh tests/verify-handoff.sh
+```
 
-## 實作驗收
+pytest 使用真實 PostgreSQL，每個測試以 migration 建立獨立資料庫。startup 腳本驗證啟動順序、重跑 migration、DB 中斷及 migration 失敗；handoff 腳本經實際 HTTP 驗證 seed、CRUD、資料持久化、更新失敗／恢復與資料重設。兩支腳本建立並清理各自的 Compose 專案與 volumes。
 
-- 全新獨立 DB 能從 migration 建出四張表並完成 CRUD；測試不依賴 demo seed。
-- 重複 upgrade 無額外 schema 變動；重複 seed 不重複或覆蓋資料。
-- API 錯誤格式與驗證符合 [API contract](api-contract.md)。
-- 商品與明細更新失敗時全部回滾；刪除後無殘留明細。
-- migration 失敗時初次啟動的 API 不啟動；healthcheck 就緒後才能視為啟動完成。
-- 重建 application container 後，DB volume 中的資料仍存在。
-
-README 包含環境準備、啟動、seed、API 範例、測試、migration、查看 log、保留資料的停止方式及會刪除資料的重設方式。`tests/verify-handoff.sh` 在獨立 Compose 專案驗證 CRUD、資料持久化、更新失敗／恢復及資料重設。AI 對話依提交者指定連結交付，見 [AI 對話來源](ai-conversation.md)。
-
-## 參考
-
-- [Flask Application Factories](https://flask.palletsprojects.com/en/stable/patterns/appfactories/)
-- [Flask-SQLAlchemy Quick Start](https://flask-sqlalchemy.palletsprojects.com/en/stable/quickstart/)
-- [SQLAlchemy Session Basics](https://docs.sqlalchemy.org/en/20/orm/session_basics.html)
-- [Docker Compose startup order](https://docs.docker.com/compose/how-tos/startup-order/)
-- [Docker Compose up](https://docs.docker.com/reference/cli/docker/compose/up/)
-- [Alembic autogenerate](https://alembic.sqlalchemy.org/en/latest/autogenerate.html)
+2026-09-12 完整驗收結果：276 tests passed，mypy、Ruff 與兩支操作腳本皆通過。

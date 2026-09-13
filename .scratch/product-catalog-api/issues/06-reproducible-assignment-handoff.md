@@ -24,6 +24,6 @@
 
 全部 9 項驗收依本輪使用者指示完成。完整容器測試 276 passed，mypy 與 Ruff 通過；startup 與 handoff 操作腳本均實際通過，包含精確 seed、完整 CRUD、資料持久化、既有環境更新失敗／恢復及明確 volume 重設。Standards／Spec 雙軸 code-review 均無 actionable findings。
 
-AI 對話依使用者明確指定的 [分享連結](https://chatgpt.com/s/cx_6aa513c2f92081918a49b17929d983f7) 交付；已確認頁面可讀，並在 [來源說明](../../../docs/ai-conversation.md) 揭露快照截至 ticket 06 開始，沒有將本次驗證摘要冒充完整對話。後續訊息不會自動加入該快照。
+AI 對話依使用者明確指定的 [分享連結](https://chatgpt.com/s/cx_6aa513c2f92081918a49b17929d983f7) 交付；已確認頁面可讀，並在 [README](../../../README.md) 揭露快照截至 ticket 06 開始，沒有將本次驗證摘要冒充完整對話。後續訊息不會自動加入該快照。
 
-Status 保留原 triage 分類，Completed 與勾選項目表示本 ticket 已完成。各項證據見 [驗證紀錄](../../../docs/verification.md)，整份作業的審核摘要見 [單一總 PR 草稿](../../../docs/pr-summary.md)。未 push、開 PR 或 merge。
+Status 保留原 triage 分類，Completed 與勾選項目表示本 ticket 已完成。交付入口見 [README](../../../README.md)，測試指令與整體結果見 [技術架構](../../../docs/architecture.md)。未 push、開 PR 或 merge。

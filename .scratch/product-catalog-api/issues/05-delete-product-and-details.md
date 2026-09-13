@@ -22,4 +22,4 @@
 
 全部 7 項驗收已完成。完整容器測試 276 passed，mypy 與 Ruff 通過；涵蓋空 body 的 204、重複／未知 code 的 404、明細 cascade、分類與其他商品保留，以及刪除途中和 commit 失敗的完整回滾。Standards／Spec 雙軸 code-review 均無 actionable findings。Status 保留原 triage 分類，Completed 與已勾選驗收項目表示本 ticket 已完成。
 
-操作範例見 [README](../../../README.md)，詳細證據見 [驗證紀錄](../../../docs/verification.md)。
+操作範例見 [API 文件](../../../docs/api-contract.md)，測試指令與整體結果見 [技術架構](../../../docs/architecture.md)。

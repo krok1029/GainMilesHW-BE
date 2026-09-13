@@ -28,4 +28,4 @@
 
 全部 13 項驗收已完成。最終完整容器測試 141 passed，mypy 與 Ruff 通過；涵蓋真實 PostgreSQL 的 HTTP 新增讀回、欄位邊界、確定重疊的分類／code 競爭，以及明細寫入與 commit 失敗的整筆 rollback。Standards／Spec review 各提出一項 P2，修正並經原 reviewer 複查結案；無待修 findings。Status 保留原 triage 分類，Completed 與已勾選驗收項目表示本 ticket 已完成。
 
-操作範例見 [README](../../../README.md)，詳細證據見 [驗證紀錄](../../../docs/verification.md)。
+操作範例見 [API 文件](../../../docs/api-contract.md)，測試指令與整體結果見 [技術架構](../../../docs/architecture.md)。

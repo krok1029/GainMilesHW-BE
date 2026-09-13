@@ -26,4 +26,4 @@
 
 全部 11 項驗收已完成。完整容器測試 264 passed，mypy 與 Ruff 通過；包含部分更新、選項替換與交集保留、共用分類、驗證優先順序、多表更新與 commit 失敗回滾，以及確定重疊請求的最後成功寫入值。Standards／Spec 雙軸 code-review 均無 actionable findings。Status 保留原 triage 分類，Completed 與已勾選驗收項目表示本 ticket 已完成。
 
-操作範例見 [README](../../../README.md)，詳細證據見 [驗證紀錄](../../../docs/verification.md)。
+操作範例見 [API 文件](../../../docs/api-contract.md)，測試指令與整體結果見 [技術架構](../../../docs/architecture.md)。
